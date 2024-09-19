@@ -9,36 +9,52 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2rem;
+  padding: 1rem;
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
   color: ${props => props.theme.colors.text.primary};
+
+  @media (min-width: 768px) {
+    padding: 2rem;
+  }
 `;
 
 const Eyebrow = styled.h3`
-  font-size: 1.25rem;
+  font-size: 1rem;
   margin-bottom: 1rem;
   text-align: center;
   font-family: ${props => props.theme.fonts.header};
+
+  @media (min-width: 768px) {
+    font-size: 1.25rem;
+  }
 `;
 
 const Title = styled.h1`
-  font-size: 3rem;
+  font-size: 2.25rem;
   margin-bottom: 1rem;
   text-align: center;
+
+  @media (min-width: 768px) {
+    font-size: 3rem;
+  }
 `;
 
 const SelectWrapper = styled.div`
   position: relative;
   display: inline-block;
-  width: 80%;
+  width: 100%;
   margin-bottom: 2rem;
+
+  @media (min-width: 768px) {
+    width: 80%;
+  }
 `;
 
 const StyledSelect = styled.div`
-  font-size: 3rem;
-  padding: 1rem 1.5rem;
+  font-size: 2.25rem;
+  padding: 0.75rem 1.5rem;
   text-align: center;
   font-family: ${props => props.theme.fonts.body};
   color: ${props => props.theme.colors.text.primary};
@@ -60,6 +76,11 @@ const StyledSelect = styled.div`
     top: 50%;
     transform: translateY(-50%);
     font-size: 1.5rem;
+  }
+
+  @media (min-width: 768px) {
+    font-size: 3rem;
+    padding: 1rem 1.5rem;
   }
 `;
 
@@ -100,31 +121,49 @@ const ResultContainer = styled.div`
   flex-direction: column;
   align-items: center;
   width: 100%;
-  margin-top: 1rem;
-  margin-bottom: 3rem;
+  margin-top: 0rem;
+  margin-bottom: 2rem;
+
+  @media (min-width: 768px) {
+    margin-top: 1rem;
+    margin-bottom: 3rem;
+  }
 `;
 
 const ValueDisplay = styled.div`
-  font-size: 3rem;
+  font-size: 2.75rem;
   font-weight: bold;
   color: ${props => props.color};
   transition: color 0.5s ease-out;
+
+  @media (min-width: 768px) {
+    font-size: 3rem;
+  }
 `;
 
 const SliderContainer = styled.div`
-  width: 80%;
+  width: 100%;
   margin-bottom: 2rem;
   background-color: ${props => props.theme.colors.secondary};
   border-radius: 0px;
+
+  @media (min-width: 768px) {
+    width: 80%;
+  }
 `;
 
 const SliderInnerContainer = styled.div`
-  padding: 2rem 2rem 1rem 2rem;
+  padding: 1em 1rem 0.75rem 1rem;
+  
+  @media (min-width: 768px) {
+    padding: 2rem 2rem 1rem 2rem;
+  }
 `;
 
 const SliderLabel = styled.div`
   font-size: 1rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  text-align: center;
 `;
 
 const SliderRow = styled.div`
@@ -187,11 +226,13 @@ const ButtonRow = styled.div`
 `;
 
 const PercentageButton = styled.button`
-  padding: 0.25rem 0.75rem;
+  padding: 0.25rem 0.5rem;
   background-color: ${props => props.active ? props.theme.colors.primary : 'transparent'};
   color: ${props => props.active ? props.theme.colors.background : props.theme.colors.text.primary};
   border: 1px solid ${props => props.theme.colors.background};
-  flex: 1 1 auto;
+  flex: 1 1 calc(33.333% - 2px);
+  margin: 1px;
+  font-size: 0.8rem;
   box-sizing: border-box;
   border-radius: 0px;
   cursor: pointer;
@@ -207,11 +248,22 @@ const PercentageButton = styled.button`
     color: ${props => props.theme.colors.background};
     opacity: 0.8;
   }
+
+  @media (min-width: 768px) {
+    flex: 1 1 auto;
+    margin: 0;
+    font-size: 1rem;
+    padding: 0.25rem 0.75rem;
+  }
 `;
 
 const ChartContainer = styled.div`
-  width: 80%;
+  width: 100%;
   margin-top: 1rem;
+
+  @media (min-width: 768px) {
+    width: 80%;
+  }
 `;
 
 const ChartRow = styled.div`
@@ -224,14 +276,24 @@ const ChartLabelContainer = styled.div`
   display: flex;
   align-items: center;
   width: 140px;
-  margin-right: 1rem;
+  margin-right: 0.5rem;
   flex-shrink: 0;
+
+  @media (min-width: 768px) {
+    width: 140px;
+    margin-right: 1rem;
+  }
 `;
 
 const ChartLabel = styled.div`
   font-size: 0.9rem;
   text-align: right;
-  margin-left: 0.5rem;
+  margin-left: 0.25rem;
+
+  @media (min-width: 768px) {
+    font-size: 0.9rem;
+    margin-left: 0.5rem;
+  }
 `;
 
 const ChartBarContainer = styled.div`
@@ -247,18 +309,22 @@ const ChartBar = styled.div`
 `;
 
 const ChartValue = styled.div`
-  margin-left: 0.5rem;
-  font-size: 0.9rem;
-  min-width: 70px;
+  margin-left: 0.25rem;
+  font-size: 0.8rem;
+  min-width: 60px;
   text-align: right;
+
+  @media (min-width: 768px) {
+    margin-left: 0.5rem;
+    font-size: 0.9rem;
+    min-width: 70px;
+  }
 `;
 
 const TOTAL_POINTS = 51000000; // Total number of Hyperliquid points
 
 const eyebrowOptions = [
-  "She Say, \"Oh, You Points Rich?\"",
-  "Points, Points, Baby",
-  "Welcome, Governance Enthusiast"
+  "Points Calculator"
 ];
 
 const SwitchContainer = styled.div`
