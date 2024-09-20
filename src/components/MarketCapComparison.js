@@ -15,6 +15,10 @@ const Container = styled.div`
   margin: 0 auto;
   color: ${props => props.theme.colors.text.primary};
 
+  -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+      box-sizing: border-box;
+
   @media (min-width: 768px) {
     padding: 2rem;
   }
