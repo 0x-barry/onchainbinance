@@ -11,7 +11,7 @@ const axiosInstance = axios.create({
   }
 });
 
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 function getCachedData(key) {
   const cachedData = localStorage.getItem(key);
