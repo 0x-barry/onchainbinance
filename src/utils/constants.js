@@ -14,7 +14,8 @@ export const COINS = {
   'Uniswap': 'uniswap',
   'Jupiter': 'jupiter-exchange-solana',
   'dYdX': 'dydx-chain',
-  'GMX': 'gmx'
+  'GMX': 'gmx',
+  'Drift': 'drift-protocol'
 };
 
 export const COIN_NAMES = Object.keys(COINS);
