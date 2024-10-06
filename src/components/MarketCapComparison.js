@@ -626,7 +626,11 @@ function MarketCapComparison() {
     : [10, 15, 20, 25, 33, 40, 51];
 
   const handleCoinChange = (newCoin) => {
-    setState(prevState => ({ ...prevState, selectedCoin: newCoin }));
+    if (newCoin === 'Drift') {
+      window.location.href = 'https://multicoin.capital';
+    } else {
+      setState(prevState => ({ ...prevState, selectedCoin: newCoin }));
+    }
   };
 
   const handlePercentageChange = (newPercentage) => {
