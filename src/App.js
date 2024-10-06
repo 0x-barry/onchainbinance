@@ -1,9 +1,10 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, NavLink, Navigate } from 'react-router-dom';
 import ThemeProvider from './ThemeProvider';
 import RatioMeter from './components/RatioMeter';
 import MarketCapComparison from './components/MarketCapComparison';
 import GlobalStyle from './GlobalStyle';
+import DriftErrorPage from './components/DriftErrorPage'; // Import the new component
 
 function App() {
   return (
@@ -11,18 +12,27 @@ function App() {
       <GlobalStyle />
       <Router>
         <div className="App">
-          {/* <nav>
+          {/* <nav className="switch-nav">
             <ul>
-              <li><Link to="/">Home</Link></li>
-              <li><Link to="/points">Points Calculator</Link></li>
+              <li><NavLink to="/ratio">Ratio</NavLink></li>
+              <li>
+                <NavLink 
+                  to="/points" 
+                  className={({ isActive }) => isActive ? 'active' : ''}
+                >
+                  Points
+                </NavLink>
+              </li>
+              <li><NavLink to="/shill">Shill Zone</NavLink></li>
             </ul>
           </nav> */}
 
           <Routes>
-            {/* <Route path="/" element={<RatioMeter />} /> */}
             <Route path="/" element={<Navigate to="/points/solana" replace />} />
-            <Route path="/points/:coin" element={<MarketCapComparison />} />
+            <Route path="/ratio" element={<RatioMeter />} />
             <Route path="/points" element={<Navigate to="/points/solana" replace />} />
+            <Route path="/points/:coin" element={<MarketCapComparison />} />
+            <Route path="/drift-error" element={<DriftErrorPage />} /> {/* Add this line */}
           </Routes>
         </div>
       </Router>

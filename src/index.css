@@ -11,3 +11,59 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+.switch-nav {
+  width: 100%;
+  max-width: 400px;
+  margin: 12px auto;
+  background-color: #0e1217;
+  border-radius: 50%;
+  padding: 1rem;
+}
+
+.switch-nav ul {
+  display: flex;
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  position: relative;
+}
+
+.switch-nav li {
+  flex: 1;
+  text-align: center;
+}
+
+.switch-nav a {
+  display: block;
+  padding: 8px 0;
+  color: #0e1217;
+  text-decoration: none;
+  transition: 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.switch-nav a.active {
+  color: #fff;
+}
+
+.switch-nav ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 33.33%;
+  height: 100%;
+  background-color: #00e6b3;
+  border-radius: 20px;
+  transition: 0.3s ease;
+}
+
+.switch-nav li:nth-child(2) a.active ~ ul::before {
+  left: 33.33%;
+}
+
+.switch-nav li:nth-child(3) a.active ~ ul::before {
+  left: 66.66%;
+}

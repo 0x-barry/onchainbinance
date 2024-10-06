@@ -170,3 +170,26 @@ export async function fetchAllFullyDilutedValuations(coinDisplayNames) {
   }
 }
 
+export async function fetchExchangeData(exchangeId) {
+  try {
+    const response = await axiosInstance.get(`/derivatives/exchanges/${exchangeId}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching data for ${exchangeId}:`, error);
+    throw error;
+  }
+}
+
+export async function fetchAllExchangesData() {
+  const exchanges = ['binance_futures', 'bybit', 'hyperliquid'];
+  try {
+    const results = await Promise.all(exchanges.map(fetchExchangeData));
+    return exchanges.reduce((acc, exchange, index) => {
+      acc[exchange] = results[index];
+      return acc;
+    }, {});
+  } catch (error) {
+    console.error('Error fetching data for all exchanges:', error);
+    throw error;
+  }
+}

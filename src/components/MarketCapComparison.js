@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import styled, { createGlobalStyle } from 'styled-components';
 import { fetchAllFullyDilutedValuations } from '../utils/api';
 import { COIN_NAMES } from '../utils/constants';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import GenslerAnimation from './GenslerAnimation';
+import hlAnimatedGif from '../images/hl-animated.gif';
+import adairImage from '../images/adair.jpg';
 
 const Container = styled.div`
   display: flex;
@@ -43,6 +45,10 @@ const Title = styled.h1`
   @media (min-width: 768px) {
     font-size: 3rem;
   }
+`;
+
+const HighlightedSpan = styled.span`
+  color: ${props => props.theme.colors.primary};
 `;
 
 const SelectWrapper = styled.div`
@@ -150,10 +156,6 @@ const SliderContainer = styled.div`
   margin-bottom: 2rem;
   background-color: ${props => props.theme.colors.secondary};
   border-radius: 0px;
-
-  @media (min-width: 768px) {
-    width: 80%;
-  }
 `;
 
 const SliderInnerContainer = styled.div`
@@ -192,7 +194,7 @@ const Slider = styled.input`
   &::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 5px;
+    width: 8px;
     height: 20px;
     background: ${props => props.theme.colors.text.primary};
     cursor: pointer;
@@ -200,11 +202,11 @@ const Slider = styled.input`
   }
 
   &::-moz-range-thumb {
-    width: 20px;
+    width: 8px;
     height: 20px;
     background: ${props => props.theme.colors.primary};
     cursor: pointer;
-    border-radius: 50%;
+    border-radius: 0%;
   }
 
   &::-webkit-slider-runnable-track {
@@ -218,8 +220,8 @@ const Slider = styled.input`
 
 const SliderValue = styled.span`
   margin-left: 1rem;
-  font-size: 1rem;
-  min-width: 40px;
+  font-size: 0.9rem;
+  min-width: 32px;
   color: ${props => props.theme.colors.text.primary};
   font-weight: bold;
 `;
@@ -234,7 +236,7 @@ const PercentageButton = styled.button`
   background-color: ${props => props.active ? props.theme.colors.primary : 'transparent'};
   color: ${props => props.active ? props.theme.colors.background : props.theme.colors.text.primary};
   border: 1px solid ${props => props.theme.colors.background};
-  flex: 1 1 calc(33.333% - 2px);
+  flex: 1 1 auto;
   margin: 1px;
   font-size: 0.8rem;
   box-sizing: border-box;
@@ -387,6 +389,48 @@ const SwitchText = styled.span`
   text-align: center;
 `;
 
+// Add this new styled component for the animated GIF
+const AnimatedLogo = styled.img`
+  width: 25px;  // Adjust the size as needed
+  height: auto;
+`;
+
+const CurrencyToggle = styled.button`
+  background: none;
+  border: none;
+  color: ${props => props.theme.colors.text.primary};
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  text-decoration: underline;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+`;
+
+const HistogramContainer = styled.div`
+  display: flex;
+  align-items: center;
+`;
+
+const AdairValue = styled(ValueDisplay)`
+  margin-right: 0.75rem;
+`;
+
+const AdairImageContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+`;
+
+const AdairImage = styled.img`
+  width: 25px;
+  height: 25px;
+  margin: 2px;
+  border-radius: 50%;
+  object-fit: cover;
+`;
+
 function CustomSelect({ value, onChange, options }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef(null);
@@ -430,24 +474,17 @@ function CustomSelect({ value, onChange, options }) {
   );
 }
 
-function AnimatedValue({ value }) {
+function AnimatedValue({ value, displayMode, onToggle }) {
   const [displayValue, setDisplayValue] = useState(value);
-  const [color, setColor] = useState('white'); // or your default text color
+  const [color, setColor] = useState('white');
   const previousValue = useRef(value);
 
   useEffect(() => {
     if (value !== previousValue.current) {
-      // Set color based on value change
       setColor(value > previousValue.current ? '#00e6b3' : 'red');
-      
-      // Animate number change
       animateValue(previousValue.current, value, 250);
-      
-      // Reset color after animation
       const colorResetTimer = setTimeout(() => setColor('white'), 250);
-      
       previousValue.current = value;
-
       return () => clearTimeout(colorResetTimer);
     }
   }, [value]);
@@ -465,10 +502,39 @@ function AnimatedValue({ value }) {
     window.requestAnimationFrame(step);
   };
 
+  const adairValue = displayValue / 800;
+
   return (
-    <ValueDisplay color={color}>
-      ${displayValue.toLocaleString()}
-    </ValueDisplay>
+    <div>
+      {displayMode === 'USD' ? (
+        <ValueDisplay color={color}>
+          ${displayValue.toLocaleString()}
+        </ValueDisplay>
+      ) : (
+        <HistogramContainer>
+          <AdairValue color={color}>
+            {adairValue.toFixed(2)}
+          </AdairValue>
+          <AdairImageContainer>
+            {Array.from({ length: Math.floor(adairValue) }).map((_, index) => (
+              <AdairImage key={index} src={adairImage} alt="CRYPTO_ADAIR" />
+            ))}
+            {(adairValue % 1) > 0 && (
+              <AdairImage 
+                src={adairImage} 
+                alt="CRYPTO_ADAIR" 
+                style={{ 
+                  clipPath: `inset(0 ${100 - ((adairValue % 1) * 100)}% 0 0)` 
+                }}
+              />
+            )}
+          </AdairImageContainer>
+        </HistogramContainer>
+      )}
+      <CurrencyToggle onClick={onToggle}>
+        {displayMode === 'USD' ? 'USD' : 'CRYPTO_ADAIR'}
+      </CurrencyToggle>
+    </div>
   );
 }
 
@@ -503,6 +569,7 @@ function MarketCapComparison() {
   const [pointValue, setPointValue] = useState(null);
   const [error, setError] = useState(null);
   const [showGensler, setShowGensler] = useState(false);
+  const [displayMode, setDisplayMode] = useState('USD');
 
   const randomEyebrow = useMemo(() => {
     const randomIndex = Math.floor(Math.random() * eyebrowOptions.length);
@@ -566,7 +633,8 @@ function MarketCapComparison() {
     setState(prevState => ({
       ...prevState,
       pointsPercentage: newPercentage,
-      isMaxiMode: newPercentage > 51 && newPercentage <= 100,
+      // Only change isMaxiMode if switching from non-Maxi to Maxi
+      isMaxiMode: prevState.isMaxiMode ? prevState.isMaxiMode : newPercentage > 51 && newPercentage <= 100,
     }));
   };
 
@@ -574,13 +642,23 @@ function MarketCapComparison() {
     if (newValue && !isMaxiMode) {
       setShowGensler(true);
     }
-    setState(prevState => ({ ...prevState, isMaxiMode: newValue }));
+    setState(prevState => ({ 
+      ...prevState, 
+      isMaxiMode: newValue,
+      // If turning off Maxi Mode, ensure percentage is at most 51
+      pointsPercentage: newValue ? prevState.pointsPercentage : Math.min(prevState.pointsPercentage, 51)
+    }));
+  };
+
+  const toggleDisplayMode = () => {
+    setDisplayMode(prevMode => prevMode === 'USD' ? 'CRYPTO_ADAIR' : 'USD');
   };
 
   return (
     <Container>
+      <AnimatedLogo src={hlAnimatedGif} alt="Animated HL Logo" />
       <Eyebrow>{randomEyebrow}</Eyebrow>
-      <Title>Show me the value of <span style={{color: props => props.theme.colors.primary}}>points</span> with the FDV of</Title>
+      <Title>Show me the value of <HighlightedSpan>points</HighlightedSpan> with the FDV of</Title>
       <CustomSelect 
         value={selectedCoin} 
         onChange={handleCoinChange}
@@ -589,7 +667,11 @@ function MarketCapComparison() {
       {error && <ErrorMessage>{error}</ErrorMessage>}
       {pointValue && pointValue !== null && (
         <ResultContainer>
-          <AnimatedValue value={pointValue} />
+          <AnimatedValue 
+            value={pointValue} 
+            displayMode={displayMode}
+            onToggle={toggleDisplayMode}
+          />
         </ResultContainer>
       )}
       <SliderContainer>
@@ -684,11 +766,4 @@ const GlobalStyle = createGlobalStyle`
   }
 `;
 
-export default function MarketCapComparisonWithStyles() {
-  return (
-    <>
-      <GlobalStyle />
-      <MarketCapComparison />
-    </>
-  );
-}
+export default MarketCapComparison;
