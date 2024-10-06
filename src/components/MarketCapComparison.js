@@ -327,7 +327,7 @@ const ChartValue = styled.div`
   }
 `;
 
-const TOTAL_POINTS = 51000000; // Total number of Hyperliquid points
+const TOTAL_POINTS = 51362258; // Total number of Hyperliquid points
 
 const eyebrowOptions = [
   "Points Calculator"
