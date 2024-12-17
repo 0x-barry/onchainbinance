@@ -460,7 +460,9 @@ function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
         <div>
           <ValueDisplay color={color}>
             ${displayValue.toLocaleString()}
-            <Multiplier $isBelow={value < hypePrice}>(×{multiple})</Multiplier>
+            <Multiplier $isBelow={value < hypePrice}>
+              ({multiple}x)
+            </Multiplier>
           </ValueDisplay>
         </div>
       ) : (
@@ -470,7 +472,9 @@ function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
             <div>
               <ValueDisplay color={color}>
                 ${displayValue.toLocaleString()}
-                <Multiplier $isBelow={value < hypePrice}>(×{multiple})</Multiplier>
+                <Multiplier $isBelow={value < hypePrice}>
+                  ({multiple}x)
+                </Multiplier>
               </ValueDisplay>
               <CurrencyToggle onClick={onToggle}>
                 USD
