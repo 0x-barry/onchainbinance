@@ -442,75 +442,68 @@ function CustomSelect({ value, onChange, options }) {
   );
 }
 
-function AnimatedValue({ value, displayMode, onToggle, fdvData }) {
+function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
   const [displayValue, setDisplayValue] = useState(value);
   const [color, setColor] = useState('white');
   const previousValue = useRef(value);
 
-  // Calculate adairValue (1 ADAIR = $100,000)
-  const adairValue = value / 100000;
-
-  useEffect(() => {
-    if (value !== previousValue.current) {
-      setColor(value > previousValue.current ? '#00e6b3' : 'red');
-      animateValue(previousValue.current, value, 250);
-      const colorResetTimer = setTimeout(() => setColor('white'), 250);
-      previousValue.current = value;
-      return () => clearTimeout(colorResetTimer);
-    }
-  }, [value]);
-
-  const animateValue = (start, end, duration) => {
-    let startTimestamp = null;
-    const step = (timestamp) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-      setDisplayValue(Math.floor(progress * (end - start) + start));
-      if (progress < 1) {
-        window.requestAnimationFrame(step);
-      }
-    };
-    window.requestAnimationFrame(step);
-  };
+  // Calculate adairValue (1 ADAIR = $800)
+  const adairValue = value / 800;
 
   const hypePrice = fdvData['Hyperliquid']?.price || 0;
   const multiple = hypePrice > 0 ? (value / hypePrice).toFixed(1) : '0.0';
 
   return (
     <div>
-      {displayMode === 'USD' ? (
-        <>
+      {showHype ? (
+        // If showing HYPE, only show USD value
+        <div>
           <ValueDisplay color={color}>
             ${displayValue.toLocaleString()}
-            <Multiplier $isBelow={value < (fdvData['Hyperliquid']?.price || 0)}>
-              ({multiple}x)
-            </Multiplier>
+            <Multiplier $isBelow={value < hypePrice}>(×{multiple})</Multiplier>
           </ValueDisplay>
-        </>
+        </div>
       ) : (
-        <HistogramContainer>
-          <AdairValue color={color}>
-            {adairValue.toFixed(2)}
-          </AdairValue>
-          <AdairImageContainer>
-            {Array.from({ length: Math.floor(adairValue) }).map((_, index) => (
-              <AdairImage key={index} src={adairImage} alt="CRYPTO_ADAIR" />
-            ))}
-            {(adairValue % 1) > 0 && (
-              <AdairImage 
-                src={adairImage} 
-                alt="CRYPTO_ADAIR" 
-                style={{ 
-                  clipPath: `inset(0 ${100 - ((adairValue % 1) * 100)}% 0 0)` 
-                }}
-              />
-            )}
-          </AdairImageContainer>
-        </HistogramContainer>
+        // If showing points, allow USD/ADAIR toggle
+        <>
+          {displayMode === 'USD' ? (
+            <div>
+              <ValueDisplay color={color}>
+                ${displayValue.toLocaleString()}
+                <Multiplier $isBelow={value < hypePrice}>(×{multiple})</Multiplier>
+              </ValueDisplay>
+              <CurrencyToggle onClick={onToggle}>
+                USD
+              </CurrencyToggle>
+            </div>
+          ) : (
+            <div>
+              <HistogramContainer>
+                <AdairValue color={color}>
+                  {adairValue.toFixed(2)}
+                </AdairValue>
+                <AdairImageContainer>
+                  {Array.from({ length: Math.floor(adairValue) }).map((_, index) => (
+                    <AdairImage key={index} src={adairImage} alt="CRYPTO_ADAIR" />
+                  ))}
+                  {(adairValue % 1) > 0 && (
+                    <AdairImage 
+                      src={adairImage} 
+                      alt="CRYPTO_ADAIR" 
+                      style={{ 
+                        clipPath: `inset(0 ${100 - ((adairValue % 1) * 100)}% 0 0)` 
+                      }}
+                    />
+                  )}
+                </AdairImageContainer>
+              </HistogramContainer>
+              <CurrencyToggle onClick={onToggle}>
+                CRYPTO_ADAIR
+              </CurrencyToggle>
+            </div>
+          )}
+        </>
       )}
-      <CurrencyToggle onClick={onToggle}>
-        {displayMode === 'USD' ? 'USD' : 'CRYPTO_ADAIR'}
-      </CurrencyToggle>
     </div>
   );
 }
@@ -839,6 +832,7 @@ function MarketCapComparison() {
             displayMode={displayMode}
             onToggle={toggleDisplayMode}
             fdvData={fdvData}
+            showHype={state.showHype}
           />
         </ResultContainer>
       )}
