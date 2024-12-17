@@ -483,7 +483,7 @@ function AnimatedValue({ value, displayMode, onToggle, fdvData }) {
           <ValueDisplay color={color}>
             ${displayValue.toLocaleString()}
             <Multiplier $isBelow={value < (fdvData['Hyperliquid']?.price || 0)}>
-              (×{multiple})
+              ({multiple}x)
             </Multiplier>
           </ValueDisplay>
         </>
@@ -941,7 +941,7 @@ function MarketCapComparison() {
                   )}
                   <ChartValue $isBelow={isBelow}>
                     ${item.value.toLocaleString()} 
-                    <Multiplier $isBelow={isBelow}>(×{multiple})</Multiplier>
+                    <Multiplier $isBelow={isBelow}>({multiple}x)</Multiplier>
                   </ChartValue>
                 </ChartBarContainer>
               </ChartRow>
