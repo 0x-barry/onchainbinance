@@ -28,11 +28,11 @@ function App() {
           </nav> */}
 
           <Routes>
-            <Route path="/" element={<Navigate to="/points/solana" replace />} />
+            <Route path="/" element={<Navigate to="/calculator/solana" replace />} />
             <Route path="/ratio" element={<RatioMeter />} />
-            <Route path="/points" element={<Navigate to="/points/solana" replace />} />
-            <Route path="/points/:coin" element={<MarketCapComparison />} />
-            <Route path="/drift-error" element={<DriftErrorPage />} /> {/* Add this line */}
+            <Route path="/calculator" element={<Navigate to="/calculator/solana" replace />} />
+            <Route path="/calculator/:coin" element={<MarketCapComparison />} />
+            <Route path="/drift-error" element={<DriftErrorPage />} />
           </Routes>
         </div>
       </Router>

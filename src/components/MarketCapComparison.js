@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import styled, { createGlobalStyle } from 'styled-components';
 import { fetchAllFullyDilutedValuations } from '../utils/api';
-import { COIN_NAMES } from '../utils/constants';
-import GenslerAnimation from './GenslerAnimation';
+import { COIN_NAMES, TOTAL_POINTS, POINTS_ALLOCATION, COINS } from '../utils/constants';
 import hlAnimatedGif from '../images/hl-animated.gif';
 import adairImage from '../images/adair.jpg';
 
+// Styled Components
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -23,17 +23,6 @@ const Container = styled.div`
 
   @media (min-width: 768px) {
     padding: 2rem;
-  }
-`;
-
-const Eyebrow = styled.h3`
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  font-family: ${props => props.theme.fonts.header};
-
-  @media (min-width: 768px) {
-    font-size: 1.25rem;
   }
 `;
 
@@ -124,6 +113,7 @@ const CoinLogo = styled.img`
   width: 30px;
   height: 30px;
   margin-right: 1rem;
+  opacity: ${props => props.$isBelow ? 0.33 : 1};
 `;
 
 const ResultContainer = styled.div`
@@ -151,199 +141,37 @@ const ValueDisplay = styled.div`
   }
 `;
 
-const SliderContainer = styled.div`
+const ToggleContainer = styled.div`
   width: 100%;
   margin-bottom: 2rem;
-  background-color: ${props => props.theme.colors.secondary};
-  border-radius: 0px;
+  padding: 1.5rem;
 `;
 
-const SliderInnerContainer = styled.div`
-  padding: 1em 1rem 0.75rem 1rem;
+const ToggleRow = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 1rem;
   
-  @media (min-width: 768px) {
-    padding: 2rem 2rem 1rem 2rem;
+  &:last-child {
+    margin-bottom: 0;
   }
 `;
 
-const SliderLabel = styled.div`
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  text-align: center;
-`;
-
-const SliderRow = styled.div`
-  display: flex;
-  align-items: center;
-  margin-bottom: 1rem;
-`;
-
-const Slider = styled.input`
-  -webkit-appearance: none;
-  width: 100%;
-  height: 8px;
-  background: ${props => props.theme.colors.background};
-  outline: none;
-  opacity: 1;
-  transition: opacity 0.2s;
-
-  &:hover {
-    opacity: 0.9;
-  }
-
-  &::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 8px;
-    height: 20px;
-    background: ${props => props.theme.colors.text.primary};
-    cursor: pointer;
-    border-radius: 0%;
-  }
-
-  &::-moz-range-thumb {
-    width: 8px;
-    height: 20px;
-    background: ${props => props.theme.colors.primary};
-    cursor: pointer;
-    border-radius: 0%;
-  }
-
-  &::-webkit-slider-runnable-track {
-    background: linear-gradient(to right, ${props => props.theme.colors.primary} 0%, ${props => props.theme.colors.primary} ${props => props.value * (props.isMaxiMode ? 1 : 100/51)}%, ${props => props.theme.colors.background} ${props => props.value * (props.isMaxiMode ? 1 : 100/51)}%, ${props => props.theme.colors.background} 100%);
-  }
-
-  &::-moz-range-progress {
-    background-color: ${props => props.theme.colors.primary};
-  }
-`;
-
-const SliderValue = styled.span`
-  margin-left: 1rem;
-  font-size: 0.9rem;
-  min-width: 32px;
-  color: ${props => props.theme.colors.text.primary};
-  font-weight: bold;
-`;
-
-const ButtonRow = styled.div`
-  display: flex;
-  width: 100%;
-`;
-
-const PercentageButton = styled.button`
-  padding: 0.25rem 0.5rem;
-  background-color: ${props => props.active ? props.theme.colors.primary : 'transparent'};
-  color: ${props => props.active ? props.theme.colors.background : props.theme.colors.text.primary};
-  border: 1px solid ${props => props.theme.colors.background};
-  flex: 1 1 auto;
-  margin: 1px;
-  font-size: 0.8rem;
-  box-sizing: border-box;
-  border-radius: 0px;
+const SwitchLabel = styled.button`
+  font-size: 0.875rem;
+  color: ${props => props.$active ? props.theme.colors.primary : props.theme.colors.text.secondary};
   cursor: pointer;
-  transition: all 0.2s;
-  font-weight: ${props => props.active ? 'bold' : 'normal'};
-
-  &:not(:last-child) {
-    border-right: none;
-  }
-
-  &:hover {
-    background-color: ${props => props.theme.colors.primary};
-    color: ${props => props.theme.colors.background};
-    opacity: 0.8;
-  }
-
-  @media (min-width: 768px) {
-    flex: 1 1 auto;
-    margin: 0;
-    font-size: 1rem;
-    padding: 0.25rem 0.75rem;
-  }
+  transition: color 0.2s ease;
+  background: none;
+  border: none;
+  padding: 0;
 `;
 
-const ChartContainer = styled.div`
-  width: 100%;
-  margin-top: 1rem;
-
-  @media (min-width: 768px) {
-    width: 80%;
-  }
-`;
-
-const ChartRow = styled.div`
+const SwitchContainer = styled.label`
   display: flex;
   align-items: center;
-  margin-bottom: 0.75rem;
-`;
-
-const ChartLabelContainer = styled.div`
-  display: flex;
-  align-items: center;
-  width: 140px;
-  margin-right: 0.5rem;
-  flex-shrink: 0;
-
-  @media (min-width: 768px) {
-    width: 140px;
-    margin-right: 1rem;
-  }
-`;
-
-const ChartLabel = styled.div`
-  font-size: 0.9rem;
-  text-align: right;
-  margin-left: 0.25rem;
-
-  @media (min-width: 768px) {
-    font-size: 0.9rem;
-    margin-left: 0.5rem;
-  }
-`;
-
-const ChartBarContainer = styled.div`
-  flex-grow: 1;
-  display: flex;
-  align-items: center;
-`;
-
-const ChartBar = styled.div`
-  height: 20px;
-  background-color: ${props => props.active ? props.theme.colors.primary : props.theme.colors.secondary};
-  transition: width 0.3s ease, background-color 0.3s ease;
-`;
-
-const ChartValue = styled.div`
-  margin-left: 0.25rem;
-  font-size: 0.8rem;
-  min-width: 60px;
-  text-align: right;
-
-  @media (min-width: 768px) {
-    margin-left: 0.5rem;
-    font-size: 0.9rem;
-    min-width: 70px;
-  }
-`;
-
-const TOTAL_POINTS = 51362258; // Total number of Hyperliquid points
-
-const eyebrowOptions = [
-  "Points Calculator"
-];
-
-const SwitchContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 1rem;
-`;
-
-const SwitchLabel = styled.label`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  margin: 0 1rem;
   cursor: pointer;
 `;
 
@@ -351,6 +179,7 @@ const SwitchInput = styled.input`
   opacity: 0;
   width: 0;
   height: 0;
+  position: absolute;
 `;
 
 const SwitchSlider = styled.span`
@@ -360,8 +189,9 @@ const SwitchSlider = styled.span`
   height: 16px;
   background-color: #ccc;
   border-radius: 16px;
-  margin-bottom: 8px;
+  margin: 0 0.5rem;
   transition: 0.4s;
+  cursor: pointer;
 
   &:before {
     position: absolute;
@@ -375,18 +205,13 @@ const SwitchSlider = styled.span`
     transition: 0.4s;
   }
 
-  ${SwitchInput}:checked + & {
-    background-color: ${props => props.theme.colors.error};
+  input:checked + & {
+    background-color: ${props => props.theme.colors.primary};
   }
 
-  ${SwitchInput}:checked + &:before {
+  input:checked + &:before {
     transform: translateX(16px);
   }
-`;
-
-const SwitchText = styled.span`
-  font-size: 0.75rem;
-  text-align: center;
 `;
 
 // Add this new styled component for the animated GIF
@@ -429,6 +254,149 @@ const AdairImage = styled.img`
   margin: 2px;
   border-radius: 50%;
   object-fit: cover;
+`;
+
+const ChartContainer = styled.div`
+  width: 100%;
+  margin-top: 2rem;
+  padding-right: 120px;
+  box-sizing: border-box;
+`;
+
+const ChartRow = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const ChartLabelContainer = styled.div`
+  display: flex;
+  align-items: center;
+  width: 120px;
+  margin-right: 1rem;
+`;
+
+const ChartLabel = styled.span`
+  font-size: 1rem;
+  color: ${props => props.$isBelow ? props.theme.colors.text.secondary : 'inherit'};
+`;
+
+const ChartBarContainer = styled.div`
+  flex: 1;
+  position: relative;
+`;
+
+const ChartBar = styled.div`
+  height: 24px;
+  background-color: ${props => props.$active ? props.theme.colors.primary : props.theme.colors.secondary};
+  transition: width 0.3s ease-out;
+`;
+
+const ChartValue = styled.span`
+  position: absolute;
+  right: -120px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+  color: ${props => props.$isBelow ? props.theme.colors.text.secondary : 'inherit'};
+  white-space: nowrap;
+`;
+
+const Eyebrow = styled.h3`
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-family: ${props => props.theme.fonts.header};
+
+  @media (min-width: 768px) {
+    font-size: 1.25rem;
+  }
+`;
+
+const MathToggle = styled.button`
+  background: none;
+  border: none;
+  color: ${props => props.theme.colors.text.secondary};
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  margin: 1rem auto;
+  padding: 0.5rem 1rem;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: ${props => props.theme.colors.primary};
+  }
+`;
+
+const MathArrow = styled.span`
+  margin-left: 0.5rem;
+  transform: ${props => props.$isOpen ? 'rotate(180deg)' : 'rotate(0deg)'};
+  transition: transform 0.2s ease;
+`;
+
+const MathContent = styled.div`
+  max-height: ${props => props.$isOpen ? '500px' : '0'};
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+  background-color: ${props => props.theme.colors.secondary};
+  margin: 0 auto;
+  width: 100%;
+  border-radius: 4px;
+`;
+
+const MathInner = styled.div`
+  padding: 1.5rem;
+  font-family: ${props => props.theme.fonts.mono};
+  font-size: 0.875rem;
+  line-height: 1.6;
+`;
+
+const MathLine = styled.div`
+  margin-bottom: 1rem;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const MathHighlight = styled.span`
+  color: ${props => props.theme.colors.primary};
+`;
+
+const BrokenChartBar = styled(ChartBar)`
+  position: relative;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -10px;
+    height: 100%;
+    width: 20px;
+    background: repeating-linear-gradient(
+      45deg,
+      ${props => props.$active ? props.theme.colors.primary : props.theme.colors.secondary},
+      ${props => props.$active ? props.theme.colors.primary : props.theme.colors.secondary} 5px,
+      transparent 5px,
+      transparent 12px
+    );
+  }
+`;
+
+const ChartSectionHeader = styled.h3`
+  font-size: 1rem;
+  margin: 3rem 0 1rem;
+  text-align: center;
+  color: ${props => props.theme.colors.text.secondary};
+  width: calc(100% + 120px);  // Include the padding width
+  position: relative;
+`;
+
+const Multiplier = styled.span`
+  color: ${props => props.$isBelow ? props.theme.colors.text.secondary : props.theme.colors.primary};
+  margin-left: 0.75rem;
 `;
 
 function CustomSelect({ value, onChange, options }) {
@@ -474,10 +442,13 @@ function CustomSelect({ value, onChange, options }) {
   );
 }
 
-function AnimatedValue({ value, displayMode, onToggle }) {
+function AnimatedValue({ value, displayMode, onToggle, fdvData }) {
   const [displayValue, setDisplayValue] = useState(value);
   const [color, setColor] = useState('white');
   const previousValue = useRef(value);
+
+  // Calculate adairValue (1 ADAIR = $100,000)
+  const adairValue = value / 100000;
 
   useEffect(() => {
     if (value !== previousValue.current) {
@@ -502,14 +473,20 @@ function AnimatedValue({ value, displayMode, onToggle }) {
     window.requestAnimationFrame(step);
   };
 
-  const adairValue = displayValue / 800;
+  const hypePrice = fdvData['Hyperliquid']?.price || 0;
+  const multiple = hypePrice > 0 ? (value / hypePrice).toFixed(1) : '0.0';
 
   return (
     <div>
       {displayMode === 'USD' ? (
-        <ValueDisplay color={color}>
-          ${displayValue.toLocaleString()}
-        </ValueDisplay>
+        <>
+          <ValueDisplay color={color}>
+            ${displayValue.toLocaleString()}
+            <Multiplier $isBelow={value < (fdvData['Hyperliquid']?.price || 0)}>
+              (×{multiple})
+            </Multiplier>
+          </ValueDisplay>
+        </>
       ) : (
         <HistogramContainer>
           <AdairValue color={color}>
@@ -538,43 +515,24 @@ function AnimatedValue({ value, displayMode, onToggle }) {
   );
 }
 
+const ORIGINAL_MAX_SUPPLY = 1000000000; // 1 billion tokens
+
 function MarketCapComparison() {
-  const { coin } = useParams();
-  const location = useLocation();
+  const { coin: urlCoin } = useParams();
   const navigate = useNavigate();
   
-  const [state, setState] = useState(() => {
-    const params = new URLSearchParams(location.search);
-    let supplyAirdropped = parseInt(params.get('supplyAirdropped'), 10);
-
-    if (isNaN(supplyAirdropped) || supplyAirdropped < 1) {
-      supplyAirdropped = 51;
-    } else if (supplyAirdropped > 100) {
-      supplyAirdropped = 100;
-    }
-
-    const normalizedCoin = coin ? coin.charAt(0).toUpperCase() + coin.slice(1).toLowerCase() : '';
-    const validCoin = COIN_NAMES.includes(normalizedCoin) ? normalizedCoin : 'Solana';
-
-    return {
-      selectedCoin: validCoin,
-      pointsPercentage: supplyAirdropped,
-      isMaxiMode: supplyAirdropped > 51 && supplyAirdropped <= 100,
-    };
-  });
-
-  const { selectedCoin, pointsPercentage, isMaxiMode } = state;
-
-  const [fdvData, setFDVData] = useState({});
+  const [fdvData, setFdvData] = useState({});
   const [pointValue, setPointValue] = useState(null);
   const [error, setError] = useState(null);
-  const [showGensler, setShowGensler] = useState(false);
-  const [displayMode, setDisplayMode] = useState('USD');
+  const [showMath, setShowMath] = useState(false);
 
-  const randomEyebrow = useMemo(() => {
-    const randomIndex = Math.floor(Math.random() * eyebrowOptions.length);
-    return eyebrowOptions[randomIndex];
-  }, []);
+  const [state, setState] = useState(() => ({
+    selectedCoin: 'Solana',
+    showHype: true,
+    useMarketCap: true
+  }));
+
+  const { selectedCoin, showHype, useMarketCap } = state;
 
   const coinOptions = useMemo(() => 
     COIN_NAMES.map(coin => ({
@@ -587,82 +545,287 @@ function MarketCapComparison() {
   );
 
   useEffect(() => {
-    async function fetchData() {
+    const fetchData = async () => {
       try {
-        setError(null);
-        const allFDVs = await fetchAllFullyDilutedValuations(COIN_NAMES);
-        setFDVData(allFDVs);
-      } catch (err) {
-        setError('Failed to fetch fully diluted valuations. Please try again later.');
+        const data = await fetchAllFullyDilutedValuations(Object.keys(COINS));
+        console.log('Fetched data:', data);
+        setFdvData(data);
+      } catch (error) {
+        console.error('Fetch error:', error);
+        setError('Failed to fetch market data');
       }
-    }
+    };
+
     fetchData();
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     const lowercaseCoin = selectedCoin.toLowerCase();
-    navigate(`/points/${lowercaseCoin}?supplyAirdropped=${pointsPercentage}`, { replace: true });
-  }, [selectedCoin, pointsPercentage, navigate]);
+    navigate(`/calculator/${lowercaseCoin}`, { replace: true });
+  }, [selectedCoin, navigate]);
 
   useEffect(() => {
     if (fdvData[selectedCoin]) {
-      const hlFDV = fdvData[selectedCoin].fdv * (pointsPercentage / 100);
-      const value = hlFDV / TOTAL_POINTS;
-      setPointValue(Math.round(value)); // Round to nearest dollar
-    }
-  }, [fdvData, selectedCoin, pointsPercentage]);
+      const baseValue = useMarketCap ? 
+        fdvData[selectedCoin].marketCap : 
+        fdvData[selectedCoin].fdv;
+      
+      const hlData = fdvData['Hyperliquid'];
+      if (!hlData) return;
 
-  const chartData = COIN_NAMES.map(coin => {
-    const fdv = fdvData[coin] ? fdvData[coin].fdv : 0;
-    const value = Math.round((fdv * (pointsPercentage / 100)) / TOTAL_POINTS); // Round to nearest dollar
-    return { name: coin, value, fdv };
-  }).sort((a, b) => b.fdv - a.fdv)
-    .map(({ name, value }) => ({ name, value }));
+      let value;
+      if (showHype) {
+        if (useMarketCap) {
+          // HYPE & MC: MC ÷ current circulating HYPE supply
+          const circulatingSupply = hlData.circulatingSupply || 0;
+          value = baseValue / circulatingSupply;
+        } else {
+          // HYPE & FDV: FDV ÷ current total HYPE supply
+          const totalSupply = hlData.totalSupply || hlData.maxSupply || 0;
+          value = baseValue / totalSupply;
+        }
+      } else {
+        if (useMarketCap) {
+          // Points & MC
+          const circulatingSupply = hlData.circulatingSupply || 0;
+          const pointsAllocationValue = POINTS_ALLOCATION * ORIGINAL_MAX_SUPPLY;
+          const circulatingPointsAllocation = pointsAllocationValue / circulatingSupply;
+          value = (baseValue * circulatingPointsAllocation) / TOTAL_POINTS;
+        } else {
+          // Points & FDV: (FDV × Points allocation) ÷ Total points
+          value = (baseValue * POINTS_ALLOCATION) / TOTAL_POINTS;
+        }
+      }
+      
+      setPointValue(Math.round(value));
+    }
+  }, [fdvData, selectedCoin, showHype, useMarketCap]);
+
+  const calculateValue = useCallback((comparisonValue, coinData) => {
+    const hlData = fdvData['Hyperliquid'];
+    if (!hlData) return 0;
+
+    if (state.showHype) {
+      if (state.useMarketCap) {
+        // HYPE & MC: MC ÷ current circulating HYPE supply
+        const circulatingSupply = hlData.circulatingSupply || 0;
+        console.log('Calculate Value - HYPE & MC:', {
+          coin: coinData.name,
+          marketCap: comparisonValue,  // This should be the comparison coin's market cap
+          hlMarketCap: hlData.marketCap,  // Log Hyperliquid's market cap for verification
+          circulatingSupply,
+          result: comparisonValue / circulatingSupply
+        });
+        return comparisonValue / circulatingSupply;
+      } else {
+        // HYPE & FDV: FDV ÷ current total HYPE supply
+        const totalSupply = hlData.totalSupply || hlData.maxSupply || 0;
+        return comparisonValue / totalSupply;
+      }
+    } else {
+      if (state.useMarketCap) {
+        // Points & MC
+        const circulatingSupply = hlData?.circulatingSupply || 0;
+        const pointsAllocationValue = POINTS_ALLOCATION * ORIGINAL_MAX_SUPPLY;
+        const circulatingPointsAllocation = pointsAllocationValue / circulatingSupply;
+        return (comparisonValue * circulatingPointsAllocation) / TOTAL_POINTS;
+      } else {
+        // Points & FDV: (FDV × Points allocation) ÷ Total points
+        return (comparisonValue * POINTS_ALLOCATION) / TOTAL_POINTS;
+      }
+    }
+  }, [state.showHype, state.useMarketCap, fdvData]);
+
+  const chartData = useMemo(() => {
+    const data = Object.keys(COINS)
+      .filter(coin => coin !== 'Hyperliquid')
+      .map(coin => {
+        const coinData = fdvData[coin];
+        if (!coinData) return { name: coin, value: 0 };
+
+        const comparisonValue = state.useMarketCap ? coinData.marketCap : coinData.fdv;
+        const value = calculateValue(comparisonValue, coinData);
+        
+        return { 
+          name: coin, 
+          value: Math.round(value)
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+
+    // Find Ethereum's value to use as the base for relative sizing
+    const ethereumValue = data.find(item => item.name === 'Ethereum')?.value || 0;
+    
+    return data.map(item => ({
+      ...item,
+      relativeValue: (item.value / ethereumValue) * 100
+    }));
+  }, [fdvData, state.useMarketCap, calculateValue]);
 
   const maxValue = Math.max(...chartData.map(item => item.value));
-
-  const percentageButtons = isMaxiMode 
-    ? [10, 25, 33, 50, 66, 75, 90]
-    : [10, 15, 20, 25, 33, 40, 51];
 
   const handleCoinChange = (newCoin) => {
     if (newCoin === 'Drift') {
       window.location.href = 'https://multicoin.capital';
     } else {
-      setState(prevState => ({ ...prevState, selectedCoin: newCoin }));
+      setState(prev => ({ ...prev, selectedCoin: newCoin }));
     }
+
   };
 
-  const handlePercentageChange = (newPercentage) => {
-    setState(prevState => ({
-      ...prevState,
-      pointsPercentage: newPercentage,
-      // Only change isMaxiMode if switching from non-Maxi to Maxi
-      isMaxiMode: prevState.isMaxiMode ? prevState.isMaxiMode : newPercentage > 51 && newPercentage <= 100,
-    }));
+  const handleHypeToggle = () => {
+    console.log('Toggling HYPE, current state:', state.showHype);
+    setState(prev => {
+      const newState = { ...prev, showHype: !prev.showHype };
+      console.log('New state will be:', newState);
+      return newState;
+    });
   };
 
-  const handleMaxiModeChange = (newValue) => {
-    if (newValue && !isMaxiMode) {
-      setShowGensler(true);
-    }
-    setState(prevState => ({ 
-      ...prevState, 
-      isMaxiMode: newValue,
-      // If turning off Maxi Mode, ensure percentage is at most 51
-      pointsPercentage: newValue ? prevState.pointsPercentage : Math.min(prevState.pointsPercentage, 51)
-    }));
+  const handleMarketCapToggle = () => {
+    console.log('Toggling Market Cap, current state:', state.useMarketCap);
+    setState(prev => {
+      const newState = { ...prev, useMarketCap: !prev.useMarketCap };
+      console.log('New state will be:', newState);
+      return newState;
+    });
   };
 
   const toggleDisplayMode = () => {
     setDisplayMode(prevMode => prevMode === 'USD' ? 'CRYPTO_ADAIR' : 'USD');
   };
 
+  const [displayMode, setDisplayMode] = useState('USD');
+
+  const titleText = useMemo(() => {
+    const tokenType = state.showHype ? '$HYPE' : 'points';
+    const valueType = state.useMarketCap ? 'market cap of' : 'FDV of';
+    return (
+      <>
+        Show me the value of <HighlightedSpan>{tokenType}</HighlightedSpan> with the {valueType}
+      </>
+    );
+  }, [state.showHype, state.useMarketCap]);
+
+  const mathExplanation = useMemo(() => {
+    const coinData = fdvData[selectedCoin];
+    if (!coinData) return null;
+
+    const hlData = fdvData['Hyperliquid'];
+    const ORIGINAL_MAX_SUPPLY = 1000000000; // 1 billion tokens
+    
+    if (state.showHype) {
+      if (state.useMarketCap) {
+        // HYPE & MC
+        const circulatingSupply = hlData?.circulatingSupply || 0;
+        return (
+          <>
+            <MathLine>
+              1. Market Cap of {selectedCoin}: <MathHighlight>${coinData.marketCap?.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              2. Current circulating HYPE supply: <MathHighlight>{circulatingSupply.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              3. Formula: Market Cap ÷ current circulating HYPE supply
+            </MathLine>
+            <MathLine>
+              4. Result: <MathHighlight>${(coinData.marketCap / circulatingSupply).toFixed(2)}</MathHighlight> per HYPE
+            </MathLine>
+          </>
+        );
+      } else {
+        // HYPE & FDV
+        const totalSupply = hlData?.totalSupply || hlData?.maxSupply || 0;
+        return (
+          <>
+            <MathLine>
+              1. FDV of {selectedCoin}: <MathHighlight>${coinData.fdv?.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              2. Total HYPE supply: <MathHighlight>{totalSupply.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              3. Formula: FDV ÷ Total HYPE supply
+            </MathLine>
+            <MathLine>
+              4. Result: <MathHighlight>${(coinData.fdv / totalSupply).toFixed(2)}</MathHighlight> per HYPE
+            </MathLine>
+          </>
+        );
+      }
+    } else {
+      if (state.useMarketCap) {
+        // Points & MC
+        const circulatingSupply = hlData?.circulatingSupply || 0;
+        const pointsAllocationValue = POINTS_ALLOCATION * ORIGINAL_MAX_SUPPLY;
+        const circulatingPointsAllocation = pointsAllocationValue / circulatingSupply;
+        
+        return (
+          <>
+            <MathLine>
+              1. Market Cap of {selectedCoin}: <MathHighlight>${coinData.marketCap?.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              2. Current HYPE circulating: <MathHighlight>{circulatingSupply.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              3. Points Allocation of Circulating HYPE: <MathHighlight>{(circulatingPointsAllocation * 100).toFixed(1)}% (310,000,000 HYPE)</MathHighlight>
+            </MathLine>
+            <MathLine>
+              4. Total Points: <MathHighlight>{TOTAL_POINTS.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              5. Formula: Market Cap × (Points allocation of circulating HYPE) ÷ Total points
+            </MathLine>
+            <MathLine>
+              6. Result: <MathHighlight>${(coinData.marketCap * circulatingPointsAllocation / TOTAL_POINTS).toFixed(2)}</MathHighlight> per point
+            </MathLine>
+          </>
+        );
+      } else {
+        // Points & FDV
+        return (
+          <>
+            <MathLine>
+              1. FDV of {selectedCoin}: <MathHighlight>${coinData.fdv?.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              2. Points allocation of total HYPE supply: <MathHighlight>{(POINTS_ALLOCATION * 100).toFixed(1)}%</MathHighlight>
+            </MathLine>
+            <MathLine>
+              3. Total points: <MathHighlight>{TOTAL_POINTS.toLocaleString()}</MathHighlight>
+            </MathLine>
+            <MathLine>
+              4. Formula: FDV × (Points allocation of HYPE supply) ÷ Total points
+            </MathLine>
+            <MathLine>
+              5. Result: <MathHighlight>${(coinData.fdv * POINTS_ALLOCATION / TOTAL_POINTS).toFixed(2)}</MathHighlight> per point
+            </MathLine>
+          </>
+        );
+      }
+    }
+  }, [state.showHype, state.useMarketCap, selectedCoin, fdvData]);
+
+  // Add these logs to see what's happening in the render
+  console.log('Current state:', state);
+  console.log('FDV data:', fdvData);
+  console.log('Selected coin data:', fdvData[selectedCoin]);
+  
+  // Also log the calculated values
+  const baseValue = state.useMarketCap ? 
+    fdvData[selectedCoin]?.marketCap : 
+    fdvData[selectedCoin]?.fdv;
+  console.log('Base value:', baseValue);
+
   return (
     <Container>
       <AnimatedLogo src={hlAnimatedGif} alt="Animated HL Logo" />
-      <Eyebrow>{randomEyebrow}</Eyebrow>
-      <Title>Show me the value of <HighlightedSpan>points</HighlightedSpan> with the FDV of</Title>
+      <Eyebrow>Calculator</Eyebrow>
+      <Title>{titleText}</Title>
       <CustomSelect 
         value={selectedCoin} 
         onChange={handleCoinChange}
@@ -675,67 +838,117 @@ function MarketCapComparison() {
             value={pointValue} 
             displayMode={displayMode}
             onToggle={toggleDisplayMode}
+            fdvData={fdvData}
           />
         </ResultContainer>
       )}
-      <SliderContainer>
-        <SliderInnerContainer>
-        <SliderLabel>Token Supply Dropped to Points Holders</SliderLabel>
-        <SliderRow>
-          <Slider
-            type="range"
-            min="1"
-            max={isMaxiMode ? "100" : "51"}
-            value={pointsPercentage}
-            onChange={(e) => handlePercentageChange(Number(e.target.value))}
-            isMaxiMode={isMaxiMode}
-          />
-          <SliderValue>{pointsPercentage}%</SliderValue>
-        </SliderRow>
-        <ButtonRow>
-          {percentageButtons.map(percent => (
-            <PercentageButton
-              key={percent}
-              active={pointsPercentage === percent}
-              onClick={() => handlePercentageChange(percent)}
-            >
-              {percent}%
-            </PercentageButton>
-          ))}
-        </ButtonRow>
-        <SwitchContainer>
-          <SwitchLabel>
+      <ToggleContainer>
+        <ToggleRow>
+          <SwitchLabel 
+            as="button"
+            $active={!state.showHype}
+            onClick={() => setState(prev => ({ ...prev, showHype: false }))}
+          >
+            Points
+          </SwitchLabel>
+          <SwitchContainer>
             <SwitchInput 
               type="checkbox" 
-              checked={isMaxiMode}
-              onChange={(e) => handleMaxiModeChange(e.target.checked)}
+              checked={state.showHype}
+              onChange={handleHypeToggle}
             />
             <SwitchSlider />
-            <SwitchText>Decentralization Maxi Mode</SwitchText>
+          </SwitchContainer>
+          <SwitchLabel 
+            as="button"
+            $active={state.showHype}
+            onClick={() => setState(prev => ({ ...prev, showHype: true }))}
+          >
+            $HYPE
           </SwitchLabel>
-        </SwitchContainer>
-        </SliderInnerContainer>
-      </SliderContainer>
+        </ToggleRow>
+        
+        <ToggleRow>
+          <SwitchLabel 
+            as="button"
+            $active={!state.useMarketCap}
+            onClick={() => setState(prev => ({ ...prev, useMarketCap: false }))}
+          >
+            FDV
+          </SwitchLabel>
+          <SwitchContainer>
+            <SwitchInput 
+              type="checkbox" 
+              checked={state.useMarketCap}
+              onChange={handleMarketCapToggle}
+            />
+            <SwitchSlider />
+          </SwitchContainer>
+          <SwitchLabel 
+            as="button"
+            $active={state.useMarketCap}
+            onClick={() => setState(prev => ({ ...prev, useMarketCap: true }))}
+          >
+            Market Cap
+          </SwitchLabel>
+        </ToggleRow>
+      </ToggleContainer>
       
-      <Eyebrow>Point Value With FDV Of</Eyebrow>
+      <MathToggle onClick={() => setShowMath(!showMath)}>
+        Show Me The Math
+        <MathArrow $isOpen={showMath}>▼</MathArrow>
+      </MathToggle>
+
+      <MathContent $isOpen={showMath}>
+        <MathInner>
+          {mathExplanation}
+        </MathInner>
+      </MathContent>
+
       <ChartContainer>
-        {chartData.map(item => (
-          <ChartRow key={item.name}>
-            <ChartLabelContainer>
-              <CoinLogo src={fdvData[item.name]?.image} alt={`${item.name} logo`} />
-              <ChartLabel>{item.name}</ChartLabel>
-            </ChartLabelContainer>
-            <ChartBarContainer>
-              <ChartBar 
-                style={{ width: `${(item.value / maxValue) * 100}%` }}
-                active={item.name === selectedCoin}
-              />
-              <ChartValue>${item.value.toLocaleString()}</ChartValue>
-            </ChartBarContainer>
-          </ChartRow>
-        ))}
+        {chartData.map((item, index) => {
+          const hypePrice = fdvData['Hyperliquid']?.price || 0;
+          const isBelow = item.value < hypePrice;
+          const multiple = hypePrice > 0 ? (item.value / hypePrice).toFixed(1) : '0.0';
+          
+          // Show RIP header only before the first below-threshold item
+          const showRipHeader = isBelow && 
+            index > 0 && 
+            chartData[index - 1].value >= hypePrice;
+
+          return (
+            <>
+              {showRipHeader && <ChartSectionHeader>💀 Rest in Peace 💀</ChartSectionHeader>}
+              <ChartRow key={item.name}>
+                <ChartLabelContainer>
+                  <CoinLogo 
+                    src={fdvData[item.name]?.image} 
+                    alt={`${item.name} logo`} 
+                    $isBelow={isBelow}
+                  />
+                  <ChartLabel $isBelow={isBelow}>{item.name}</ChartLabel>
+                </ChartLabelContainer>
+                <ChartBarContainer>
+                  {item.name === 'Bitcoin' ? (
+                    <BrokenChartBar 
+                      $active={item.name === selectedCoin}
+                    />
+                  ) : (
+                    <ChartBar 
+                      style={{ width: `${Math.min(item.relativeValue, 100)}%` }}
+                      $active={item.name === selectedCoin}
+                    />
+                  )}
+                  <ChartValue $isBelow={isBelow}>
+                    ${item.value.toLocaleString()} 
+                    <Multiplier $isBelow={isBelow}>(×{multiple})</Multiplier>
+                  </ChartValue>
+                </ChartBarContainer>
+              </ChartRow>
+            </>
+          );
+        })}
       </ChartContainer>
-      <GenslerAnimation trigger={showGensler} />
     </Container>
   );
 }
@@ -743,31 +956,6 @@ function MarketCapComparison() {
 const ErrorMessage = styled.div`
   color: red;
   margin-top: 1rem;
-`;
-
-const GlobalStyle = createGlobalStyle`
-  ${StyledSelect} option {
-    font-size: 1rem;
-    padding: 0.5rem 1rem;
-    background-color: white;
-    color: ${props => props.theme.colors.text.primary};
-
-    &:hover {
-      background-color: ${props => props.theme.colors.primary};
-    }
-  }
-  
-  ${StyledSelect} option::before {
-    content: '';
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    margin-right: 0.5rem;
-    border-radius: 50%;
-    background-image: url(attr(data-image));
-    background-size: cover;
-    vertical-align: middle;
-  }
 `;
 
 export default MarketCapComparison;

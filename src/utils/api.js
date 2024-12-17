@@ -147,17 +147,21 @@ export async function fetchAllFullyDilutedValuations(coinDisplayNames) {
     if (!response.data || !Array.isArray(response.data)) {
       throw new Error('Invalid data received from API');
     }
+
     const result = {};
     for (const coin of response.data) {
       const coinName = Object.keys(COINS).find(key => COINS[key] === coin.id);
       result[coinName] = {
         price: coin.current_price,
         marketCap: coin.market_cap,
-        fdv: coin.fully_diluted_valuation,
+        fdv: coin.fully_diluted_valuation || (coin.current_price * (coin.max_supply || coin.total_supply)),
         volume24h: coin.total_volume,
         change24h: coin.price_change_percentage_24h,
         lastUpdated: new Date(coin.last_updated).getTime() / 1000,
-        image: coin.image
+        image: coin.image,
+        circulatingSupply: coin.circulating_supply,
+        totalSupply: coin.total_supply,
+        maxSupply: coin.max_supply
       };
     }
 
