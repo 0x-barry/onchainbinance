@@ -399,6 +399,20 @@ const Multiplier = styled.span`
   margin-left: 0.75rem;
 `;
 
+const AtehunLink = styled.a`
+  display: block;
+  text-align: center;
+  margin-top: 0.5rem;
+  color: ${props => props.theme.colors.text.primary};
+  text-decoration: none;
+  font-size: 0.875rem;
+
+  .ticker {
+    color: ${props => props.theme.colors.primary};
+    text-decoration: none;
+  }
+`;
+
 function CustomSelect({ value, onChange, options }) {
   const [isOpen, setIsOpen] = useState(false);
   const selectRef = useRef(null);
@@ -443,11 +457,13 @@ function CustomSelect({ value, onChange, options }) {
 }
 
 function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
-  const [displayValue, setDisplayValue] = useState(value);
   const [color, setColor] = useState('white');
   const previousValue = useRef(value);
 
-  // Calculate adairValue (1 ADAIR = $800)
+  useEffect(() => {
+    previousValue.current = value;
+  }, [value]);
+
   const adairValue = value / 800;
 
   const hypePrice = fdvData['Hyperliquid']?.price || 0;
@@ -456,25 +472,19 @@ function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
   return (
     <div>
       {showHype ? (
-        // If showing HYPE, only show USD value
         <div>
           <ValueDisplay color={color}>
-            ${displayValue.toLocaleString()}
-            <Multiplier $isBelow={value < hypePrice}>
-              ({multiple}x)
-            </Multiplier>
+            ${value.toLocaleString()}
+            <Multiplier $isBelow={value < hypePrice}>({multiple}x)</Multiplier>
           </ValueDisplay>
         </div>
       ) : (
-        // If showing points, allow USD/ADAIR toggle
         <>
           {displayMode === 'USD' ? (
             <div>
               <ValueDisplay color={color}>
-                ${displayValue.toLocaleString()}
-                <Multiplier $isBelow={value < hypePrice}>
-                  ({multiple}x)
-                </Multiplier>
+                ${value.toLocaleString()}
+                <Multiplier $isBelow={value < hypePrice}>({multiple}x)</Multiplier>
               </ValueDisplay>
               <CurrencyToggle onClick={onToggle}>
                 USD
@@ -504,6 +514,13 @@ function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
               <CurrencyToggle onClick={onToggle}>
                 CRYPTO_ADAIR
               </CurrencyToggle>
+              <AtehunLink 
+                href="https://app.hyperliquid.xyz/trade/0xbebb35d03b83a302a2aa06dbaa67dd9f"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Brought to you by <span className="ticker">$ATEHUN</span>
+              </AtehunLink>
             </div>
           )}
         </>
@@ -519,7 +536,6 @@ function MarketCapComparison() {
   const navigate = useNavigate();
   
   const [fdvData, setFdvData] = useState({});
-  const [pointValue, setPointValue] = useState(null);
   const [error, setError] = useState(null);
   const [showMath, setShowMath] = useState(false);
 
@@ -532,30 +548,40 @@ function MarketCapComparison() {
   const { selectedCoin, showHype, useMarketCap } = state;
 
   const coinOptions = useMemo(() => 
-    COIN_NAMES.map(coin => ({
-      value: coin,
-      image: fdvData[coin]?.image,
-      fdv: fdvData[coin]?.fdv || 0
-    }))
-    .sort((a, b) => b.fdv - a.fdv),
+    COIN_NAMES
+      .filter(coin => coin !== 'Hyperliquid')
+      .map(coin => ({
+        value: coin,
+        image: fdvData[coin]?.image,
+        fdv: fdvData[coin]?.fdv || 0
+      }))
+      .sort((a, b) => b.fdv - a.fdv),
     [fdvData]
   );
 
   useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
     const fetchData = async () => {
       try {
         const data = await fetchAllFullyDilutedValuations(Object.keys(COINS));
-        console.log('Fetched data:', data);
-        setFdvData(data);
+        if (isMounted) {
+          setFdvData(data);
+        }
       } catch (error) {
-        console.error('Fetch error:', error);
-        setError('Failed to fetch market data');
+        if (isMounted) {
+          setError('Failed to fetch market data');
+        }
       }
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -563,41 +589,54 @@ function MarketCapComparison() {
     navigate(`/calculator/${lowercaseCoin}`, { replace: true });
   }, [selectedCoin, navigate]);
 
-  useEffect(() => {
-    if (fdvData[selectedCoin]) {
-      const baseValue = useMarketCap ? 
-        fdvData[selectedCoin].marketCap : 
-        fdvData[selectedCoin].fdv;
-      
-      const hlData = fdvData['Hyperliquid'];
-      if (!hlData) return;
-
-      let value;
-      if (showHype) {
-        if (useMarketCap) {
-          // HYPE & MC: MC ÷ current circulating HYPE supply
-          const circulatingSupply = hlData.circulatingSupply || 0;
-          value = baseValue / circulatingSupply;
-        } else {
-          // HYPE & FDV: FDV ÷ current total HYPE supply
-          const totalSupply = hlData.totalSupply || hlData.maxSupply || 0;
-          value = baseValue / totalSupply;
-        }
-      } else {
-        if (useMarketCap) {
-          // Points & MC
-          const circulatingSupply = hlData.circulatingSupply || 0;
-          const pointsAllocationValue = POINTS_ALLOCATION * ORIGINAL_MAX_SUPPLY;
-          const circulatingPointsAllocation = pointsAllocationValue / circulatingSupply;
-          value = (baseValue * circulatingPointsAllocation) / TOTAL_POINTS;
-        } else {
-          // Points & FDV: (FDV × Points allocation) ÷ Total points
-          value = (baseValue * POINTS_ALLOCATION) / TOTAL_POINTS;
-        }
-      }
-      
-      setPointValue(Math.round(value));
+  const pointValue = useMemo(() => {
+    // Skip calculation if data isn't loaded
+    if (!fdvData[selectedCoin] || !fdvData['Hyperliquid']) {
+      return null;
     }
+
+    const baseValue = useMarketCap ? 
+      fdvData[selectedCoin].marketCap : 
+      fdvData[selectedCoin].fdv;
+    
+    const hlData = fdvData['Hyperliquid'];
+    
+    // Skip calculation if required data is missing
+    if (!baseValue || !hlData.circulatingSupply) {
+      return null;
+    }
+
+    let value;
+    if (showHype) {
+      if (useMarketCap) {
+        const circulatingSupply = hlData.circulatingSupply;
+        value = baseValue / circulatingSupply;
+      } else {
+        const totalSupply = hlData.totalSupply || hlData.maxSupply;
+        if (!totalSupply) return null;
+        value = baseValue / totalSupply;
+      }
+    } else {
+      if (useMarketCap) {
+        const circulatingSupply = hlData.circulatingSupply;
+        const pointsAllocationValue = POINTS_ALLOCATION * ORIGINAL_MAX_SUPPLY;
+        const circulatingPointsAllocation = pointsAllocationValue / circulatingSupply;
+        value = (baseValue * circulatingPointsAllocation) / TOTAL_POINTS;
+      } else {
+        value = (baseValue * POINTS_ALLOCATION) / TOTAL_POINTS;
+      }
+    }
+
+    // Add debug logging
+    console.log('Value calculation:', {
+      coin: selectedCoin,
+      baseValue,
+      result: Math.round(value),
+      showHype,
+      useMarketCap
+    });
+
+    return Math.round(value);
   }, [fdvData, selectedCoin, showHype, useMarketCap]);
 
   const calculateValue = useCallback((comparisonValue, coinData) => {
@@ -608,13 +647,6 @@ function MarketCapComparison() {
       if (state.useMarketCap) {
         // HYPE & MC: MC ÷ current circulating HYPE supply
         const circulatingSupply = hlData.circulatingSupply || 0;
-        console.log('Calculate Value - HYPE & MC:', {
-          coin: coinData.name,
-          marketCap: comparisonValue,  // This should be the comparison coin's market cap
-          hlMarketCap: hlData.marketCap,  // Log Hyperliquid's market cap for verification
-          circulatingSupply,
-          result: comparisonValue / circulatingSupply
-        });
         return comparisonValue / circulatingSupply;
       } else {
         // HYPE & FDV: FDV ÷ current total HYPE supply
@@ -636,13 +668,13 @@ function MarketCapComparison() {
   }, [state.showHype, state.useMarketCap, fdvData]);
 
   const chartData = useMemo(() => {
+    if (!fdvData['Hyperliquid']) return [];
+
     const data = Object.keys(COINS)
-      .filter(coin => coin !== 'Hyperliquid')
+      .filter(coin => coin !== 'Hyperliquid' && fdvData[coin])
       .map(coin => {
         const coinData = fdvData[coin];
-        if (!coinData) return { name: coin, value: 0 };
-
-        const comparisonValue = state.useMarketCap ? coinData.marketCap : coinData.fdv;
+        const comparisonValue = useMarketCap ? coinData.marketCap : coinData.fdv;
         const value = calculateValue(comparisonValue, coinData);
         
         return { 
@@ -652,42 +684,33 @@ function MarketCapComparison() {
       })
       .sort((a, b) => b.value - a.value);
 
-    // Find Ethereum's value to use as the base for relative sizing
+    // Use Ethereum's value as the max reference for relative widths
     const ethereumValue = data.find(item => item.name === 'Ethereum')?.value || 0;
+    const maxValue = ethereumValue;
     
+    // Add relative width to each item
     return data.map(item => ({
       ...item,
-      relativeValue: (item.value / ethereumValue) * 100
+      relativeValue: item.name === 'Bitcoin' ? 100 : (item.value / maxValue) * 100
     }));
-  }, [fdvData, state.useMarketCap, calculateValue]);
+  }, [fdvData, useMarketCap, calculateValue]);
 
   const maxValue = Math.max(...chartData.map(item => item.value));
 
-  const handleCoinChange = (newCoin) => {
+  const handleCoinChange = useCallback((newCoin) => {
     if (newCoin === 'Drift') {
       window.location.href = 'https://multicoin.capital';
     } else {
       setState(prev => ({ ...prev, selectedCoin: newCoin }));
     }
-
-  };
+  }, []);
 
   const handleHypeToggle = () => {
-    console.log('Toggling HYPE, current state:', state.showHype);
-    setState(prev => {
-      const newState = { ...prev, showHype: !prev.showHype };
-      console.log('New state will be:', newState);
-      return newState;
-    });
+    setState(prev => ({ ...prev, showHype: !prev.showHype }));
   };
 
   const handleMarketCapToggle = () => {
-    console.log('Toggling Market Cap, current state:', state.useMarketCap);
-    setState(prev => {
-      const newState = { ...prev, useMarketCap: !prev.useMarketCap };
-      console.log('New state will be:', newState);
-      return newState;
-    });
+    setState(prev => ({ ...prev, useMarketCap: !prev.useMarketCap }));
   };
 
   const toggleDisplayMode = () => {
@@ -829,7 +852,7 @@ function MarketCapComparison() {
         options={coinOptions}
       />
       {error && <ErrorMessage>{error}</ErrorMessage>}
-      {pointValue && pointValue !== null && (
+      {pointValue !== null && (
         <ResultContainer>
           <AnimatedValue 
             value={pointValue} 
@@ -909,15 +932,14 @@ function MarketCapComparison() {
           const isBelow = item.value < hypePrice;
           const multiple = hypePrice > 0 ? (item.value / hypePrice).toFixed(1) : '0.0';
           
-          // Show RIP header only before the first below-threshold item
           const showRipHeader = isBelow && 
             index > 0 && 
             chartData[index - 1].value >= hypePrice;
 
           return (
-            <>
+            <React.Fragment key={item.name}>
               {showRipHeader && <ChartSectionHeader>💀 Rest in Peace 💀</ChartSectionHeader>}
-              <ChartRow key={item.name}>
+              <ChartRow>
                 <ChartLabelContainer>
                   <CoinLogo 
                     src={fdvData[item.name]?.image} 
@@ -933,7 +955,7 @@ function MarketCapComparison() {
                     />
                   ) : (
                     <ChartBar 
-                      style={{ width: `${Math.min(item.relativeValue, 100)}%` }}
+                      style={{ width: `${item.relativeValue}%` }}
                       $active={item.name === selectedCoin}
                     />
                   )}
@@ -943,7 +965,7 @@ function MarketCapComparison() {
                   </ChartValue>
                 </ChartBarContainer>
               </ChartRow>
-            </>
+            </React.Fragment>
           );
         })}
       </ChartContainer>

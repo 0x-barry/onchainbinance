@@ -42,7 +42,6 @@ export async function fetchFullyDilutedValuation(coinDisplayName) {
   const cachedData = getCachedData(cacheKey);
   
   if (cachedData) {
-    console.log('Cached data:', cachedData);
     return cachedData;
   }
 
@@ -61,7 +60,6 @@ export async function fetchFullyDilutedValuation(coinDisplayName) {
     setCachedData(cacheKey, fdv);
     return fdv;
   } catch (error) {
-    console.error('Error fetching FDV:', error.response ? error.response.data : error.message);
     throw new Error(`Failed to fetch fully diluted valuation for ${coinDisplayName}`);
   }
 }
@@ -119,7 +117,6 @@ export async function fetchAllFullyDilutedValuations(coinDisplayNames) {
   const cachedData = getCachedData(cacheKey);
   
   if (cachedData) {
-    console.log('Using cached data for all FDVs:', cachedData);
     return cachedData;
   }
 
@@ -166,10 +163,8 @@ export async function fetchAllFullyDilutedValuations(coinDisplayNames) {
     }
 
     setCachedData(cacheKey, result);
-    console.log('Setting cached data for all FDVs:', result);
     return result;
   } catch (error) {
-    console.error('Error fetching all FDVs:', error);
     throw error;
   }
 }
