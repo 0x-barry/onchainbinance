@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import styled, { createGlobalStyle } from 'styled-components';
+import { useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
 import { fetchAllFullyDilutedValuations } from '../utils/api';
 import { COIN_NAMES, TOTAL_POINTS, POINTS_ALLOCATION, COINS } from '../utils/constants';
 import hlAnimatedGif from '../images/hl-animated.gif';
@@ -457,7 +457,7 @@ function CustomSelect({ value, onChange, options }) {
 }
 
 function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
-  const [color, setColor] = useState('white');
+  const [color] = useState('white');
   const previousValue = useRef(value);
 
   useEffect(() => {
@@ -532,7 +532,6 @@ function AnimatedValue({ value, displayMode, onToggle, fdvData, showHype }) {
 const ORIGINAL_MAX_SUPPLY = 1000000000; // 1 billion tokens
 
 function MarketCapComparison() {
-  const { coin: urlCoin } = useParams();
   const navigate = useNavigate();
   
   const [fdvData, setFdvData] = useState({});
@@ -694,8 +693,6 @@ function MarketCapComparison() {
       relativeValue: item.name === 'Bitcoin' ? 100 : (item.value / maxValue) * 100
     }));
   }, [fdvData, useMarketCap, calculateValue]);
-
-  const maxValue = Math.max(...chartData.map(item => item.value));
 
   const handleCoinChange = useCallback((newCoin) => {
     if (newCoin === 'Drift') {
@@ -938,7 +935,7 @@ function MarketCapComparison() {
 
           return (
             <React.Fragment key={item.name}>
-              {showRipHeader && <ChartSectionHeader>💀 Rest in Peace 💀</ChartSectionHeader>}
+              {showRipHeader && <ChartSectionHeader><span role="img" aria-label="skull">💀</span> Rest in Peace <span role="img" aria-label="skull">💀</span></ChartSectionHeader>}
               <ChartRow>
                 <ChartLabelContainer>
                   <CoinLogo 
