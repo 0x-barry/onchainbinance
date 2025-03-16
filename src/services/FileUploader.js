@@ -17,7 +17,7 @@ import Papa from 'papaparse';
  * - Regular Withdrawals: No tag required
  * - Internal Transfers (perp.spot.transfer, sub.account.transfer, spot.perp.transfer):
  *   • No tag required
- *   • TODO: Consider splitting these into separate transactions (send/receive)
+ *   • TODO: Consider excluding these from the timeline
  *     to allow proper matching and zero net impact in Koinly
  * - Vault Operations:
  *   • Deposits (create.vault.capitalize, vault.deposit): "Add to Pool"
@@ -36,7 +36,7 @@ import Papa from 'papaparse';
  * - Undelegate: "Remove from Pool"
  * - Transfers to/from staking:
  *   • No tag required
- *   • TODO: Consider splitting these into separate transactions (send/receive)
+ *   • TODO: Consider excluding these from the timeline
  *     to allow proper matching in Koinly
  * 
  * UI Display:
@@ -117,9 +117,10 @@ export class FileUploader {
     });
   }
 
-  static async storeProcessedData(processedTrades, fundingData, depositsData, stakingRewards = [], stakingActions = []) {
+  static async processData(processedTrades, fundingData, depositsData, stakingRewards = [], stakingActions = []) {
     // Get token data
     const tokenData = await this.getSpotTokenMap();
+    localStorage.setItem('tokenAddressMap', JSON.stringify(tokenData.tokenAddressMap));
     
     // Process all data types and create timeline
     const timeline = [
@@ -130,22 +131,61 @@ export class FileUploader {
         ...this.processStakingActions(stakingActions, tokenData.tokenAddressMap).map(action => ({ ...action, eventType: 'stakingAction' }))
     ].sort((a, b) => new Date(a.time) - new Date(b.time));
     
-    // Format transaction details for each event
-    // const formattedTimeline = timeline.map(event => ({
-    //     ...this.minimizeEventData(event),
-    //     formattedDetails: this.formatTransactionDetails(event)
-    // }));
-    
-    // Store only token address map for Koinly export
-    localStorage.setItem('tokenAddressMap', JSON.stringify(tokenData.tokenAddressMap));
-    
     // Return the formatted timeline directly
     return { timeline };
   }
 
-  static downloadKoinlyCSV() {
+  static downloadKoinlyCSV(timeline) {
     try {
-      const csvContent = this.exportToKoinlyCSV();
+      if (!timeline || !Array.isArray(timeline)) {
+        throw new Error('No timeline data provided');
+      }
+
+      // Define CSV headers
+      const headers = [
+        'Date',
+        'Sent Amount',
+        'Sent Currency',
+        'Received Amount',
+        'Received Currency',
+        'Fee Amount',
+        'Fee Currency',
+        'Net Worth Amount',
+        'Net Worth Currency',
+        'Label',
+        'Description',
+        'TxHash'
+      ];
+
+      // Convert timeline data to CSV rows
+      const rows = timeline.map(event => {
+        return [
+          event.time,
+          event.koinly.sentAmount,
+          event.display.sentCurrency,
+          event.koinly.receivedAmount,
+          event.display.receivedCurrency,
+          event.koinly.feeAmount,
+          event.koinly.feeCurrency,
+          event.koinly.netWorthAmount || '',
+          event.koinly.netWorthCurrency || '',
+          event.koinly.tag,
+          event.koinly.description,
+          '' // TxHash
+        ].map(cell => {
+          // Escape cells containing commas or quotes
+          if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
+            return `"${cell.toString().replace(/"/g, '""')}"`;
+          }
+          return cell;
+        });
+      });
+
+      // Combine headers and rows
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+      ].join('\n');
       
       // Create a Blob with the CSV content
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -178,10 +218,9 @@ export class FileUploader {
     }
 
     return trades.map(trade => {
-      const dir = trade.dir.toLowerCase();
-      const isSpot = dir.includes('buy') || dir.includes('sell');
-      const isBuyOrOpen = dir.includes('buy') || dir.includes('open');
-      const direction = dir.includes('long') ? 'Long' : 'Short';
+      const direction = trade.dir.toLowerCase();
+      const isSpot = direction.includes('buy') || direction.includes('sell');
+      const isBuyOrOpen = direction.includes('buy') || direction.includes('open');
       const price = parseFloat(trade.px);
       const size = parseFloat(trade.sz);
       const fee = parseFloat(trade.fee);
@@ -190,59 +229,75 @@ export class FileUploader {
       
       const coin = this.normalizeCoinName(trade.coin, tokenData);
       const coinAddress = tokenData.tokenAddressMap[coin] || coin;
-      
+      const usdc = 'USDC';
+      const usdcAddress = tokenData.tokenAddressMap[usdc] || usdc;
+    
       let tag = '';
       let sentAmount = '';
       let sentCurrency = '';
+      let sentCurrencyDisplay = '';
       let receivedAmount = '';
       let receivedCurrency = '';
+      let receivedCurrencyDisplay = '';
       let feeAmount = '';
       let feeCurrency = '';
+      let feeCurrencyDisplay = '';
+      let description = `${isSpot ? (isBuyOrOpen ? 'Buy' : 'Sell') : (isBuyOrOpen ? 'Open' : 'Close')} ${size} ${coin} at ${price} USDC per ${coin}`;
+      const eventLabel = isSpot 
+        ? `${isBuyOrOpen ? 'Buy' : 'Sell'} ${coin}`
+        : `${isBuyOrOpen ? 'Open' : 'Close'} ${coin} ${direction.includes('long') ? 'Long' : 'Short'}`;
       
+      // Spot trade logic
       if (isSpot) {
-        // Spot trade logic remains the same
         if (isBuyOrOpen) {
           sentAmount = notional.toString();
-          sentCurrency = coinAddress;
+          sentCurrency = usdcAddress;
+          sentCurrencyDisplay = usdc;
           receivedAmount = size.toString();
           receivedCurrency = coinAddress;
+          receivedCurrencyDisplay = coin;
           feeAmount = fee.toString(); // Fee is in coin for spot buys
           feeCurrency = coinAddress;
+          feeCurrencyDisplay = coin;
         } else {
           sentAmount = size.toString();
           sentCurrency = coinAddress;
+          sentCurrencyDisplay = coin;
           receivedAmount = notional.toString();
-          receivedCurrency = coinAddress;
+          receivedCurrency = usdcAddress;
+          receivedCurrencyDisplay = usdc;
           feeAmount = fee.toString(); // Fee is in USDC for spot sells
-          feeCurrency = 'USDC';
+          feeCurrency = usdcAddress;
+          feeCurrencyDisplay = usdc;
         }
+      // Perp trade logic
       } else {
-        // Perp trade logic
         if (isBuyOrOpen) {
-          // Fee is included in sent/received amounts
-          feeAmount = '';
-          feeCurrency = '';
           if (fee < 0) {
             // Fee rebate
             tag = 'Fee Refund';
             receivedAmount = Math.abs(fee).toString();
-            receivedCurrency = coinAddress;
+            receivedCurrency = usdcAddress;
+            receivedCurrencyDisplay = usdc;
           } else if (fee > 0) {
             // Regular fee
             tag = 'Futures Fee';
             sentAmount = fee.toString();
-            sentCurrency = coinAddress;
+            sentCurrency = usdcAddress;
+            sentCurrencyDisplay = usdc;
           }
         } else {
           // Closing a position - handle PnL
           if (pnl > 0) {
             tag = 'Realized Gain';
             receivedAmount = pnl.toString();
-            receivedCurrency = coinAddress;
+            receivedCurrency = usdcAddress;
+            receivedCurrencyDisplay = usdc;
           } else if (pnl < 0) {
             tag = 'Realized Gain';
             sentAmount = Math.abs(pnl).toString();
-            sentCurrency = coinAddress;
+            sentCurrency = usdcAddress;
+            sentCurrencyDisplay = usdc;
           }
           
         }
@@ -261,21 +316,19 @@ export class FileUploader {
           feeAmount,
           feeCurrency,
           tag,
-          description: `${isSpot ? (isBuyOrOpen ? 'Buy' : 'Sell') : (isBuyOrOpen ? 'Open' : 'Close')} ${size} ${coin} at ${price} USDC per ${coin}`
+          description
         },
         
         display: {
-          sentAmount: sentAmount ? parseFloat(sentAmount).toFixed(4) : '',
-          sentCurrency: coin,
-          receivedAmount: receivedAmount ? parseFloat(receivedAmount).toFixed(4) : '',
-          receivedCurrency: coin,
-          feeAmount: feeAmount ? parseFloat(feeAmount).toFixed(4) : '',
-          feeCurrency: isSpot && isBuyOrOpen ? coin : 'USDC',
-          category: isSpot ? 
-            `${isBuyOrOpen ? 'Buy' : 'Sell'} ${coin}` : 
-            `${isBuyOrOpen ? 'Open' : 'Close'} ${coin} ${direction}`,
-          description: `${isSpot ? (isBuyOrOpen ? 'Buy' : 'Sell') : (isBuyOrOpen ? 'Open' : 'Close')} ${size} ${coin} at ${price} USDC per ${coin}`,
-          pnl: pnl.toFixed(4)
+          sentAmount,
+          sentCurrency: sentCurrencyDisplay,
+          receivedAmount,
+          receivedCurrency: receivedCurrencyDisplay,
+          feeAmount,
+          feeCurrency: feeCurrencyDisplay,
+          eventLabel,
+          description,
+          pnl
         },
         
         details: {
@@ -294,44 +347,52 @@ export class FileUploader {
 
     return funding.map(payment => {
       const amount = parseFloat(payment.payment);
-      const size = parseFloat(payment.sz);
       const rate = parseFloat(payment.rate);
       const coin = payment.coin;
-      const usdcAddress = tokenAddressMap['USDC'] || 'USDC';
+      const usdc = 'USDC';
+      const usdcAddress = tokenAddressMap[usdc] || usdc;
       
+      const sentAmount = amount < 0 ? Math.abs(amount).toString() : '';
+      const sentCurrency = amount < 0 ? usdcAddress : '';
+      const sentCurrencyDisplay = usdc;
+      const receivedAmount = amount > 0 ? amount.toString() : '';
+      const receivedCurrency = amount > 0 ? usdcAddress : '';
+      const receivedCurrencyDisplay = usdc;
+      const feeAmount = '';
+      const feeCurrency = '';
+      const tag = 'Funding Fee';
+      const eventLabel = 'Funding Fee';
+      const description = `Funding payment for ${coin} position at rate ${rate}`;
+
       return {
         time: this.parseDate(payment.time).toISOString(),
         eventType: 'funding',
         
         koinly: {
-          sentAmount: amount < 0 ? Math.abs(amount).toString() : '',
-          sentCurrency: amount < 0 ? usdcAddress : '',
-          receivedAmount: amount > 0 ? amount.toString() : '',
-          receivedCurrency: amount > 0 ? usdcAddress : '',
-          feeAmount: '',
-          feeCurrency: '',
-          tag: 'Funding Fee',
-          description: `Funding payment for ${coin} position at rate ${rate}`
+          sentAmount,
+          sentCurrency,
+          receivedAmount,
+          receivedCurrency,
+          feeAmount,
+          feeCurrency,
+          tag,
+          description
         },
         
         display: {
-          sentAmount: amount < 0 ? Math.abs(amount).toFixed(4) : '',
-          sentCurrency: 'USDC',
-          receivedAmount: amount > 0 ? amount.toFixed(4) : '',
-          receivedCurrency: 'USDC',
-          feeAmount: '',
-          feeCurrency: '',
-          category: 'Funding Payment',
-          description: `Funding ${amount > 0 ? 'received' : 'paid'} for ${coin} position`
+          sentAmount,
+          sentCurrency: sentCurrencyDisplay,
+          receivedAmount,
+          receivedCurrency: receivedCurrencyDisplay,
+          feeAmount,
+          feeCurrency,
+          eventLabel,
+          description
         },
         
         details: {
           funding: {
-            coin,
-            rate,
-            side: payment.side,
-            size,
-            amount
+            ...payment
           }
         }
       };
@@ -354,50 +415,92 @@ export class FileUploader {
       const action = deposit.action.toLowerCase();
       const coinAddress = tokenAddressMap[coin] || coin;
       
-      const isDeposit = ['deposit', 'receive.spot', 'receive.usdc.perps.wallet'].includes(action);
-      const isVaultOperation = ['create.vault.capitalize', 'vault.deposit', 'vault.distribution', 'vault.withdrawal'].includes(action);
+      const isDeposit = ['deposit', 'receive.spot', 'receive.usdc.perps.wallet', 'vault.distribution', 'vault.withdrawal','open.interest.reward', 'genesis.distribution'].includes(action);
       const isInternalTransfer = ['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action);
       
-      let koinlyTag = '';
-      if (isVaultOperation) {
-        koinlyTag = ['create.vault.capitalize', 'vault.deposit'].includes(action) ? 'Add to Pool' : 'Remove from Pool';
+      const feeAmount = fee > 0 ? fee.toString() : '';
+      const feeCurrency = fee > 0 ? coinAddress : '';
+      const feeCurrencyDisplay = fee > 0 ? coin : '';
+
+      const sentAmount = !isDeposit ? amount.toString() : '';
+      const sentCurrency = !isDeposit ? coinAddress : '';
+      const sentCurrencyDisplay = !isDeposit ? coin : '';
+
+      const receivedAmount = isDeposit ? amount.toString() : '';
+      const receivedCurrency = isDeposit ? coinAddress : '';
+      const receivedCurrencyDisplay = isDeposit ? coin : '';
+
+      // Get netWorthAmount and netWorthCurrency from the deposit if they exist
+      const netWorthAmount = deposit.netWorthAmount || '';
+      const netWorthCurrency = deposit.netWorthCurrency || '';
+
+      let eventLabel = '';
+      let tag = '';
+      let description = '';
+      if (['deposit', 'receive.spot', 'receive.usdc.perps.wallet'].includes(action)) {
+        eventLabel = 'Deposit';
+        description = `Deposited ${amount} ${coin}`;
+      } else if (['withdrawal', 'send.spot', 'send.usdc.perps.wallet'].includes(action)) {
+        eventLabel = 'Withdrawal';
+        description = `Withdrew ${amount} ${coin}`;
+      } else if (['create.vault.capitalize', 'vault.deposit'].includes(action)) {
+        eventLabel = 'Vault Deposit';
+        tag = 'Add to Pool';
+        description = `Deposited ${amount} ${coin} to Vault`;
+      } else if (['vault.distribution', 'vault.withdrawal'].includes(action)) {
+        eventLabel = 'Vault Withdrawal';
+        tag = 'Remove from Pool';
+        description = `Withdrew ${amount} ${coin} from Vault`;
+      } else if (['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action)) {
+        eventLabel = 'Internal Transfer';
+        description = `Transferred ${amount} ${coin} between subaccounts or spot and perp accounts`;
+      } else if (action === 'open.interest.reward') {
+        eventLabel = 'Open Interest Reward';
+        tag = 'Reward';
+        description = `Received ${amount} ${coin} interest reward`;
       } else if (action === 'genesis.distribution') {
-        koinlyTag = 'Airdrop';
+        eventLabel = `${coin} Airdrop`;
+        tag = 'Airdrop';
+        description = `Received ${amount} ${coin} airdrop`;
+      } else {
+        eventLabel = 'Transfer';
+        description = `Transferred ${amount} ${coin}`;
       }
       
       return {
         time: this.parseDate(deposit.time).toISOString(),
         eventType: 'transfer',
+        isInternalTransfer,
         
         koinly: {
-          sentAmount: !isDeposit ? amount.toString() : '',
-          sentCurrency: !isDeposit ? coinAddress : '',
-          receivedAmount: isDeposit ? amount.toString() : '',
-          receivedCurrency: isDeposit ? coinAddress : '',
-          feeAmount: fee > 0 ? fee.toString() : '',
-          feeCurrency: fee > 0 ? coinAddress : '',
-          tag: koinlyTag,
-          description: `${isDeposit ? 'Deposit' : 'Withdrawal'} of ${amount} ${coin}`
+          sentAmount,
+          sentCurrency,
+          receivedAmount,
+          receivedCurrency,
+          feeAmount,
+          feeCurrency,
+          netWorthAmount,
+          netWorthCurrency,
+          tag,
+          description
         },
         
         display: {
-          sentAmount: !isDeposit ? amount.toFixed(4) : '',
-          sentCurrency: coin,
-          receivedAmount: isDeposit ? amount.toFixed(4) : '',
-          receivedCurrency: coin,
-          feeAmount: fee > 0 ? fee.toFixed(4) : '',
-          feeCurrency: coin,
-          category: isInternalTransfer ? 'Internal Transfer' : (isVaultOperation ? 'Vault Operation' : (isDeposit ? 'Deposit' : 'Withdrawal')),
-          description: `${isDeposit ? 'Deposit' : 'Withdrawal'} of ${amount} ${coin}`
+          sentAmount,
+          sentCurrency: sentCurrencyDisplay,
+          receivedAmount,
+          receivedCurrency: receivedCurrencyDisplay,
+          feeAmount,
+          feeCurrency: feeCurrencyDisplay,
+          netWorthAmount,
+          netWorthCurrency,
+          eventLabel, 
+          description
         },
         
         details: {
           transfer: {
-            action,
-            coin,
-            amount,
-            fee,
-            isInternalTransfer
+            ...deposit,
           }
         }
       };
@@ -413,31 +516,42 @@ export class FileUploader {
       const amount = parseFloat(reward.amount);
       const coin = 'HYPE';
       const coinAddress = tokenAddressMap[coin] || coin;
+
+      const sentAmount = '';
+      const sentCurrency = '';
+      const receivedAmount = amount.toString();
+      const receivedCurrency = coinAddress;
+      const receivedCurrencyDisplay = coin;
+      const feeAmount = '';
+      const feeCurrency = '';
+      const tag = 'Reward';
+      const eventLabel = 'Staking Reward';
+      const description = `Staking reward of ${amount} ${coin}`;
       
       return {
-        time: this.parseDate(new Date(parseInt(reward.time))).toISOString(),
+        time: this.parseDate(reward.time).toISOString(),
         eventType: 'stakingReward',
         
         koinly: {
-          sentAmount: '',
-          sentCurrency: '',
-          receivedAmount: amount.toString(),
-          receivedCurrency: coinAddress,
-          feeAmount: '',
-          feeCurrency: '',
-          tag: 'Reward',
-          description: `Staking reward of ${amount} ${coin}`
+          sentAmount,
+          sentCurrency,
+          receivedAmount,
+          receivedCurrency,
+          feeAmount,
+          feeCurrency,
+          tag,
+          description
         },
         
         display: {
-          sentAmount: '',
-          sentCurrency: '',
-          receivedAmount: amount.toFixed(4),
-          receivedCurrency: coin,
-          feeAmount: '',
-          feeCurrency: '',
-          category: 'Staking Reward',
-          description: `Received ${amount} ${coin} staking reward`
+          sentAmount,
+          sentCurrency,
+          receivedAmount,
+          receivedCurrency: receivedCurrencyDisplay,
+          feeAmount,
+          feeCurrency,
+          eventLabel,
+          description
         },
         
         details: {
@@ -463,46 +577,67 @@ export class FileUploader {
       const coin = 'HYPE';
       const coinAddress = tokenAddressMap[coin] || coin;
       const actionType = action.action.toLowerCase();
-      const isStake = actionType === 'delegate';
-      const isTransfer = ['deposit', 'withdrawal'].includes(actionType);
+      const isInternalTransfer = ['deposit', 'withdrawal'].includes(actionType);
+
+      const sentAmount = ['deposit', 'delegate'].includes(actionType) ? amount.toString() : '';
+      const sentCurrency = ['deposit', 'delegate'].includes(actionType) ? coinAddress : '';
+      const sentCurrencyDisplay = ['deposit', 'delegate'].includes(actionType) ? coin : '';
+      const receivedAmount = ['withdrawal', 'undelegate'].includes(actionType) ? amount.toString() : '';
+      const receivedCurrency = ['withdrawal', 'undelegate'].includes(actionType) ? coinAddress : '';
+      const receivedCurrencyDisplay = ['withdrawal', 'undelegate'].includes(actionType) ? coin : '';
+      const feeAmount = '';
+      const feeCurrency = '';
       
-      let koinlyTag = '';
-      if (!isTransfer) {
-        koinlyTag = isStake ? 'Add to Pool' : 'Remove from Pool';
+      // Get event label using logic from getEventLabel
+      let eventLabel = '';
+      let tag = '';
+      let description = '';
+      if (actionType === 'delegate') {
+        eventLabel = 'Stake HYPE';
+        tag = 'Stake';
+        description = `Staked ${amount} ${coin}`;
+      } else if (actionType === 'undelegate') {
+        eventLabel = 'Unstake HYPE';
+        tag = 'Stake';
+        description = `Unstaked ${amount} ${coin}`;
+      } else if (actionType === 'deposit') {
+        eventLabel = 'Transfer Spot to Staking';
+        description = `Internal Transfer: Transferred ${amount} ${coin} from Spot to Staking`;
+      } else if (actionType === 'withdrawal') {
+        eventLabel = 'Transfer Staking to Spot';
+        description = `Internal Transfer: Transferred ${amount} ${coin} from Staking to Spot`;
       }
       
       return {
-        time: this.parseDate(new Date(parseInt(action.time))).toISOString(),
+        time: this.parseDate(action.time).toISOString(),
         eventType: 'stakingAction',
+        isInternalTransfer,
         
         koinly: {
-          sentAmount: isStake || (isTransfer && actionType === 'deposit') ? amount.toString() : '',
-          sentCurrency: isStake || (isTransfer && actionType === 'deposit') ? coinAddress : '',
-          receivedAmount: !isStake || (isTransfer && actionType === 'withdrawal') ? amount.toString() : '',
-          receivedCurrency: !isStake || (isTransfer && actionType === 'withdrawal') ? coinAddress : '',
-          feeAmount: '',
-          feeCurrency: '',
-          tag: koinlyTag,
-          description: `${isStake ? 'Staked' : 'Unstaked'} ${amount} ${coin}`
+          sentAmount,
+          sentCurrency,
+          receivedAmount,
+          receivedCurrency,
+          feeAmount,
+          feeCurrency,
+          tag,
+          description
         },
         
         display: {
-          sentAmount: isStake || (isTransfer && actionType === 'deposit') ? amount.toFixed(4) : '',
-          sentCurrency: coin,
-          receivedAmount: !isStake || (isTransfer && actionType === 'withdrawal') ? amount.toFixed(4) : '',
-          receivedCurrency: coin,
-          feeAmount: '',
-          feeCurrency: '',
-          category: isTransfer ? 'Internal Transfer' : (isStake ? 'Stake HYPE' : 'Unstake HYPE'),
-          description: `${isStake ? 'Staked' : 'Unstaked'} ${amount} ${coin}`
+          sentAmount,
+          sentCurrency: sentCurrencyDisplay,
+          receivedAmount,
+          receivedCurrency: receivedCurrencyDisplay,
+          feeAmount,
+          feeCurrency,
+          eventLabel,
+          description
         },
         
         details: {
           staking: {
-            action: actionType,
-            validator: action.validator,
-            amount,
-            isInternalTransfer: isTransfer
+            ...action,
           }
         }
       };
@@ -510,13 +645,16 @@ export class FileUploader {
   }
 
   // Helper Functions
+
+  // Standardizes the coin name
   static normalizeCoinName(coin, tokenData) {
     const { pairToTokenMap } = tokenData || { pairToTokenMap: {} };
-    if (coin === 'PURR/USDC') return 'PURR';
+    if (coin === 'PURR/USDC') return 'PURR'; // early PURR transactions were named PURR/USDC in CSV
     if (pairToTokenMap[coin]) return pairToTokenMap[coin];
     return coin;
   }
 
+  // Parses the date from the CSV data
   static parseDate(dateStr) {
     try {
       // Handle Date objects directly
@@ -529,12 +667,12 @@ export class FileUploader {
         throw new Error('Invalid date: received empty value');
       }
 
-      // Handle timestamp format (e.g., '1740950869326')
+      // Handle timestamp format (e.g., '1740950869326') for staking CSVs
       if (/^\d{13}$/.test(dateStr)) {
         return new Date(parseInt(dateStr));
       }
 
-      // Handle date-time format (e.g., '11/1/2023 - 12:00:37')
+      // Handle date-time format (e.g., '11/1/2023 - 12:00:37') for other CSVs
       if (dateStr.includes(' - ')) {
         const [datePart, timePart] = dateStr.split(' - ');
         const [month, day, year] = datePart.split('/');
@@ -551,269 +689,25 @@ export class FileUploader {
     }
   }
 
-  static getCategoryLabel(event) {
-    switch (event.eventType) {
-      case 'trade': {
-        if (event.type === 'spot') {
-          return `${event.dir.toLowerCase().includes('buy') ? 'Buy' : 'Sell'} ${event.coin}`;
-        } else {
-          const direction = event.direction || (event.dir.toLowerCase().includes('long') ? 'Long' : 'Short');
-          const isOpen = event.dir.toLowerCase().includes('open');
-          return `${isOpen ? 'Open' : 'Close'} ${event.coin} ${direction}`;
-        }
-      }
-      case 'transfer': {
-        const action = event.action?.toLowerCase() || '';
-        if (['deposit', 'receive.spot', 'receive.usdc.perps.wallet'].includes(action)) {
-          return 'Deposit';
-        }
-        if (['withdrawal', 'send.spot', 'send.usdc.perps.wallet'].includes(action)) {
-          return 'Withdrawal';
-        }
-        if (['create.vault.capitalize', 'vault.deposit'].includes(action)) {
-          return 'Vault Deposit';
-        }
-        if (['vault.distribution', 'vault.withdrawal'].includes(action)) {
-          return 'Vault Withdrawal';
-        }
-        if (['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action)) {
-          return 'Internal Transfer';
-        }
-        if (action === 'open.interest.reward') {
-          return 'Reward';
-        }
-        if (action === 'genesis.distribution') {
-          return 'Airdrop';
-        }
-        return 'Transfer';
-      }
-      case 'funding':
-        return 'Funding';
-      case 'stakingReward':
-        return 'Staking Reward';
-      case 'stakingAction': {
-        const action = event.action?.toLowerCase() || '';
-        if (action === 'delegate') {
-          return 'Staking';
-        } else if (action === 'undelegate') {
-          return 'Unstaking';
-        } else if (action === 'deposit') {
-          return 'Spot to Staking Transfer';
-        } else if (action === 'withdrawal') {
-          return 'Staking to Spot Transfer';
-        }
-        return 'Staking Action';
-      }
-      default:
-        return 'Other';
-    }
-  }
-
-  /**
-   * Clears processed data from localStorage
-   * @param {boolean} clearRawData - Whether to also clear raw data
-   */
-  static clearProcessedData(clearRawData = false) {
-    console.log('Clearing processed data from localStorage');
+  // Clears all data from localStorage
+  static clearLocalStorage() {
+    console.log('Clearing all data from localStorage');
     
-    // Clear only essential items
+    // Clear token address map
     localStorage.removeItem('tokenAddressMap');
     
-    // Optionally clear raw data
-    if (clearRawData) {
-        localStorage.removeItem('rawTradeData');
-        localStorage.removeItem('rawFundingData');
-        localStorage.removeItem('rawDepositsData');
-        localStorage.removeItem('rawStakingRewardsData');
-        localStorage.removeItem('rawStakingActionsData');
-    }
+    // Clear all raw data
+    localStorage.removeItem('rawTradeData');
+    localStorage.removeItem('rawFundingData');
+    localStorage.removeItem('rawDepositsData');
+    localStorage.removeItem('rawStakingRewardsData');
+    localStorage.removeItem('rawStakingActionsData');
   }
-
-  // Transaction Formatting & Export
-  // static formatTransactionDetails(event) {
-  //   try {
-  //     // Helper function to extract display name from token address
-  //     const getDisplayName = (tokenAddress) => {
-  //       return tokenAddress?.split(':')[0] || tokenAddress;
-  //     };
-
-  //     switch (event.eventType) {
-  //       case 'trade': {
-  //         const isSpot = event.type === 'spot';
-  //         const isBuyOrOpen = event.dir.toLowerCase().includes('buy') || event.dir.toLowerCase().includes('open');
-  //         const price = event.price || event.px;
-  //         const size = event.size || event.sz;
-  //         const fees = event.fees || event.fee || 0;
-  //         const pnl = event.pnl || event.closedPnl || 0;
-  //         const direction = event.dir.toLowerCase().includes('long') ? 'Long' : 'Short';
-          
-  //         // Store both full address and display versions
-  //         const coinAddress = event.coinWithAddress;
-  //         const coinDisplay = getDisplayName(event.coinWithAddress);
-  //         const usdcAddress = 'USDC:0x6d1e7cde53ba9467b783cb7c530ce054:HYPE';
-          
-  //         let description = '';
-  //         if (isSpot) {
-  //           description = `${isBuyOrOpen ? 'Buy' : 'Sell'} ${size} ${coinDisplay} for ${(price * size).toFixed(6)} USDC at ${price.toFixed(4)} USDC/coin`;
-  //         } else {
-  //           if (isBuyOrOpen) {
-  //             description = `Open ${direction} ${size} ${coinDisplay} position at ${price.toFixed(4)} USDC/coin`;
-  //           } else {
-  //             description = `Close ${direction} ${size} ${coinDisplay} position with ${pnl > 0 ? 'profit' : 'loss'} of ${Math.abs(pnl).toFixed(5)} USDC`;
-  //           }
-  //         }
-          
-  //         let tag = 'Trade';
-  //         if (!isSpot) {
-  //           if (isBuyOrOpen) {
-  //             tag = 'Margin Fee';
-  //           } else {
-  //             tag = pnl > 0 ? 'Realized Profit' : 'Margin Fee';
-  //           }
-  //         }
-          
-  //         let sent = '', received = '';
-  //         let sentDisplay = '', receivedDisplay = '';
-  //         let gain = 0;
-          
-  //         if (isSpot) {
-  //           if (isBuyOrOpen) {
-  //             sent = `${(price * size).toFixed(2)} ${usdcAddress}`;
-  //             sentDisplay = `${(price * size).toFixed(2)} USDC`;
-  //             received = `${size.toFixed(2)} ${coinAddress}`;
-  //             receivedDisplay = `${size.toFixed(2)} ${coinDisplay}`;
-  //             gain = -fees;
-  //           } else {
-  //             sent = `${size.toFixed(2)} ${coinAddress}`;
-  //             sentDisplay = `${size.toFixed(2)} ${coinDisplay}`;
-  //             received = `${(price * size).toFixed(2)} ${usdcAddress}`;
-  //             receivedDisplay = `${(price * size).toFixed(2)} USDC`;
-  //             gain = (price * size) - fees;
-  //           }
-  //         } else {
-  //           if (isBuyOrOpen) {
-  //             sent = `${fees.toFixed(2)} ${usdcAddress}`;
-  //             sentDisplay = `${fees.toFixed(2)} USDC`;
-  //             received = '';
-  //             receivedDisplay = '';
-  //             gain = -fees;
-  //           } else {
-  //             if (pnl > 0) {
-  //               sent = '';
-  //               sentDisplay = '';
-  //               received = `${pnl.toFixed(2)} ${usdcAddress}`;
-  //               receivedDisplay = `${pnl.toFixed(2)} USDC`;
-  //               gain = pnl - fees;
-  //             } else {
-  //               sent = `${Math.abs(pnl).toFixed(2)} ${usdcAddress}`;
-  //               sentDisplay = `${Math.abs(pnl).toFixed(2)} USDC`;
-  //               received = '';
-  //               receivedDisplay = '';
-  //               gain = pnl - fees;
-  //             }
-  //           }
-  //         }
-          
-  //         return {
-  //           description,
-  //           tag,
-  //           sent,
-  //           sentDisplay,
-  //           received,
-  //           receivedDisplay,
-  //           fee: fees > 0 ? `${fees.toFixed(2)} ${usdcAddress}` : '-',
-  //           feeDisplay: fees > 0 ? `${fees.toFixed(2)} USDC` : '-',
-  //           gain: gain.toFixed(2),
-  //           categoryLabel: this.getCategoryLabel(event)
-  //         };
-  //       }
-        
-  //       case 'transfer': {
-  //         const amount = event.amount;
-  //         const coin = event.coinWithAddress || event.coin;
-  //         const displayCoin = getDisplayName(coin);
-  //         const action = event.action?.toLowerCase() || '';
-          
-  //         let tag = '';
-  //         let description = '';
-  //         let sent = '', received = '';
-  //         let sentDisplay = '', receivedDisplay = '';
-  //         let gain = 0;
-          
-  //         if (['deposit', 'receive.spot', 'receive.usdc.perps.wallet'].includes(action)) {
-  //           tag = 'Deposit';
-  //           description = `Deposit ${amount} ${displayCoin} to Hyperliquid`;
-  //           received = `${amount} ${coin}`;
-  //           receivedDisplay = `${amount} ${displayCoin}`;
-  //         } 
-  //         else if (['withdrawal', 'send.spot', 'send.usdc.perps.wallet'].includes(action)) {
-  //           tag = 'Withdrawal';
-  //           description = `Withdrawal ${amount} ${displayCoin} from Hyperliquid`;
-  //           sent = `${amount} ${coin}`;
-  //           sentDisplay = `${amount} ${displayCoin}`;
-  //         }
-  //         else if (['create.vault.capitalize', 'vault.deposit'].includes(action)) {
-  //           tag = 'Vault Deposit';
-  //           description = `${action === 'create.vault.capitalize' ? 'Create vault with' : 'Deposit to vault'} ${amount} ${displayCoin}`;
-  //           sent = `${amount} ${coin}`;
-  //           sentDisplay = `${amount} ${coin}`;
-  //         }
-  //         else if (['vault.distribution', 'vault.withdrawal'].includes(action)) {
-  //           tag = 'Vault Withdrawal';
-  //           description = `${action === 'vault.distribution' ? 'Distribution from vault' : 'Withdrawal from vault'} ${amount} ${displayCoin}`;
-  //           received = `${amount} ${coin}`;
-  //           receivedDisplay = `${amount} ${coin}`;
-  //         }
-  //         else if (['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action)) {
-  //           tag = 'Internal Transfer';
-  //           if (action === 'perp.spot.transfer') {
-  //             description = `Transfer from Perp to Spot account: ${amount} ${displayCoin}`;
-  //           } else if (action === 'spot.perp.transfer') {
-  //             description = `Transfer from Spot to Perp account: ${amount} ${displayCoin}`;
-  //           } else {
-  //             description = `Transfer to/from sub account: ${amount} ${displayCoin}`;
-  //           }
-  //           // For internal transfers, we show both sent and received to indicate the movement
-  //           sent = `${amount} ${coin}`;
-  //           sentDisplay = `${amount} ${coin}`;
-  //           received = `${amount} ${coin}`;
-  //           receivedDisplay = `${amount} ${coin}`;
-  //         }
-          
-  //         return {
-  //           description,
-  //           tag,
-  //           sent,
-  //           sentDisplay,
-  //           received,
-  //           receivedDisplay,
-  //           fee: '',
-  //           feeDisplay: '',
-  //           gain: '',
-  //           categoryLabel: this.getCategoryLabel(event)
-  //         };
-  //       }
-  //     }
-  //   } catch (error) {
-  //     console.error('Error formatting transaction details:', error);
-  //     return {
-  //       description: '',
-  //       tag: '',
-  //       sent: '',
-  //       sentDisplay: '',
-  //       received: '',
-  //       receivedDisplay: '',
-  //       fee: '',
-  //       feeDisplay: '',
-  //       gain: '',
-  //       categoryLabel: ''
-  //     };
-  //   }
-  // }
 
   // API Integration
   static async getSpotTokenMap() {
     try {
+
       const response = await fetch('https://api.hyperliquid.xyz/info', {
         method: 'POST',
         headers: {
@@ -851,8 +745,6 @@ export class FileUploader {
           }
         }
       });
-
-      console.log('Token address map:', tokenAddressMap);
       
       return { 
         pairToTokenMap: tokenMap,
@@ -867,6 +759,116 @@ export class FileUploader {
           'HYPE': 'HYPE:0x0d01dc56dcaaca66ad901c959b4011ec:HYPE'
         }
       };
+    }
+  }
+
+  // Validates that all required headers exist in the CSV data
+  static validateCSVFormat(data, fileType) {
+    if (!data || !data[0]) {
+      throw new Error('No data to validate');
+    }
+
+    const headers = Object.keys(data[0]);
+    const requiredColumns = {
+      trades: ['time', 'dir', 'px', 'sz', 'fee', 'coin', 'ntl', 'closedPnl'],
+      funding: ['time', 'payment', 'rate', 'coin', 'sz', 'side'],
+      deposits: ['time', 'action', 'accountValueChange', 'fee'],
+      stakingRewards: ['time', 'amount', 'source'],
+      stakingActions: ['time', 'action', 'amount', 'validator']
+    };
+
+    const missingColumns = requiredColumns[fileType]?.filter(col => !headers.includes(col));
+    
+    if (missingColumns?.length > 0) {
+      throw new Error(
+        `Missing required columns for ${fileType}: ${missingColumns.join(', ')}\n` +
+        `Found columns: ${headers.join(', ')}`
+      );
+    }
+  }
+
+  static generateTestKoinlyCSV(tokenAddressMap) {
+    try {
+      // Define CSV headers
+      const headers = [
+        'Date',
+        'Sent Amount',
+        'Sent Currency',
+        'Received Amount',
+        'Received Currency',
+        'Fee Amount',
+        'Fee Currency',
+        'Net Worth Amount',
+        'Net Worth Currency',
+        'Label',
+        'Description',
+        'TxHash'
+      ];
+
+      // Generate two rows for each token
+      const rows = Object.entries(tokenAddressMap).flatMap(([token, address]) => [
+        // Row with full address format
+        [
+          new Date().toISOString(), // Current date
+          '', // Sent Amount
+          '', // Sent Currency
+          '1', // Received Amount
+          address, // Full token address (e.g., PURR:address:HYPE)
+          '', // Fee Amount
+          '', // Fee Currency
+          '', // Net Worth Amount
+          '', // Net Worth Currency
+          '', // Label
+          `Test transaction for ${token} using full address`, // Description with token name
+          '' // TxHash
+        ],
+        // Row with just token symbol
+        [
+          new Date().toISOString(), // Current date
+          '', // Sent Amount
+          '', // Sent Currency
+          '1', // Received Amount
+          token, // Just the token symbol
+          '', // Fee Amount
+          '', // Fee Currency
+          '', // Net Worth Amount
+          '', // Net Worth Currency
+          '', // Label
+          `Test transaction for ${token} using token symbol`, // Description with token name
+          '' // TxHash
+        ]
+      ]);
+
+      // Combine headers and rows
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => 
+          // Properly escape cells containing commas or quotes
+          cell ? `"${cell.toString().replace(/"/g, '""')}"` : ''
+        ).join(','))
+      ].join('\n');
+      
+      // Create a Blob with the CSV content
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      
+      // Create a download link
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      // Set link properties
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'koinly_test_transactions.csv');
+      link.style.visibility = 'hidden';
+      
+      // Add to document, click and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('Test Koinly CSV file download initiated');
+    } catch (error) {
+      console.error('Error generating test Koinly CSV:', error);
+      throw error;
     }
   }
 }

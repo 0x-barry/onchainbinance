@@ -1,133 +1,265 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { FileUploader } from '../../services/FileUploader';
 
 const Container = styled.div`
   padding: 2rem;
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
 `;
 
+const Header = styled.div`
+  margin-bottom: 2rem;
+`;
+
 const Title = styled.h1`
-  color: #fff;
-  margin-bottom: 2rem;
-`;
-
-const StepIndicator = styled.div`
-  color: #888;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
-`;
-
-const FileUploadSection = styled.div`
-  margin-bottom: 2rem;
-`;
-
-const RequiredFiles = styled.div`
-  margin-bottom: 1rem;
-`;
-
-const FileStatusRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  color: ${props => props.theme.colors.text.primary};
   margin-bottom: 0.5rem;
+  font-family: ${props => props.theme.fonts.header};
 `;
 
-const FileStatus = styled.span`
-  color: ${props => props.$isUploaded ? '#4CAF50' : '#888'};
-  font-weight: ${props => props.$isUploaded ? 'bold' : 'normal'};
+const UploadCard = styled.div`
+  background: ${props => props.theme.colors.secondary};
+  border-radius: ${props => props.theme.borderRadius.large};
+  padding: 1.5rem;
+  box-shadow: ${props => props.theme.shadows.card};
+  color: ${props => props.theme.colors.text.primary};
+  margin-bottom: 2rem;
+  position: relative;
 `;
 
-const ClearFileButton = styled.button`
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  font-size: 0.875rem;
-  margin-left: 0.5rem;
-`;
-
-const FileInput = styled.input`
-  width: 100%;
-  padding: 0.5rem;
-  margin-bottom: 1rem;
-  border: 2px dashed ${props => props.theme.colors.primary};
-  border-radius: 4px;
-  background: transparent;
+const UploadContent = styled.div`
+  display: flex;
+  gap: 1.5rem;
   
-  &[type="file"] {
-    &::file-selector-button {
-      margin-right: 1rem;
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 4px;
-      background: ${props => props.theme.colors.primary};
-      color: white;
-      cursor: pointer;
-      transition: background 0.2s ease;
-
-      &:hover {
-        background: ${props => props.theme.colors.primary}dd;
-      }
-    }
+  @media (max-width: 768px) {
+    flex-direction: column;
   }
 `;
 
-const LoadingSpinner = styled.div`
+const DropZoneContainer = styled.div`
+  width: 50%;
+  
+  @media (max-width: 768px) {
+    width: 100%;
+  }
+`;
+
+const DropZone = styled.div`
+  border: 2px dashed ${props => props.theme.colors.text.secondary};
+  border-radius: ${props => props.theme.borderRadius.medium};
+  text-align: center;
+  background: ${props => props.theme.colors.background};
+  transition: all 0.2s ease;
+  position: relative;
+  height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  
+  &:hover {
+    border-color: ${props => props.theme.colors.primary};
+  }
+`;
+
+const UploadIcon = styled.div`
   margin-bottom: 1rem;
+  svg {
+    width: 48px;
+    height: 48px;
+    color: ${props => props.theme.colors.primary};
+    opacity: 0.8;
+  }
+`;
+
+const DropText = styled.p`
+  font-size: 1rem;
+  color: ${props => props.theme.colors.text.secondary};
+  margin-bottom: 0.5rem;
+  font-family: ${props => props.theme.fonts.body};
+`;
+
+const BrowseText = styled.span`
+  color: ${props => props.theme.colors.primary};
+  cursor: pointer;
+  font-weight: ${props => props.theme.fontWeights.bold};
+  
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const FileFormatText = styled.p`
+  font-size: 0.75rem;
+  color: ${props => props.theme.colors.text.secondary};
+  margin-bottom: 1rem;
+  font-family: ${props => props.theme.fonts.body};
+`;
+
+const HiddenInput = styled.input`
+  display: none;
+`;
+
+const FileStatusContainer = styled.div`
+  width: 50%;
+  
+  @media (max-width: 768px) {
+    width: 100%;
+  }
+`;
+
+const FileStatusList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const FileStatusItem = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  background: ${props => props.$isUploaded ? props.theme.colors.secondary : props.theme.colors.background};
+  border: 1px solid ${props => props.$isUploaded ? props.theme.colors.primary : props.theme.colors.secondary};
+  border-radius: ${props => props.theme.borderRadius.small};
+  transition: all 0.2s ease;
+`;
+
+const FileTypeIcon = styled.div`
+  margin-right: 0.75rem;
+  
+  svg {
+    width: 24px;
+    height: 24px;
+    color: ${props => props.$color || props.theme.colors.primary};
+  }
+`;
+
+const FileTypeDetails = styled.div`
+  flex: 1;
+`;
+
+const FileTypeName = styled.div`
+  font-weight: ${props => props.theme.fontWeights.bold};
+  color: ${props => props.theme.colors.text.primary};
+  display: flex;
+  align-items: center;
+  font-family: ${props => props.theme.fonts.body};
+`;
+
+const RequiredBadge = styled.span`
+  background: ${props => props.$isRequired ? props.theme.colors.accent.green : props.theme.colors.secondary};
+  color: ${props => props.theme.colors.text.primary};
+  font-size: 0.6rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
+  font-weight: ${props => props.theme.fontWeights.bold};
+  font-family: ${props => props.theme.fonts.body};
+`;
+
+const FileTypeStatus = styled.div`
+  font-size: 0.75rem;
+  color: ${props => props.$isUploaded ? props.theme.colors.accent.green : props.theme.colors.text.secondary};
+  font-family: ${props => props.theme.fonts.body};
+`;
+
+const FileProgress = styled.div`
+  width: 100%;
+  height: 3px;
+  background: ${props => props.theme.colors.secondary};
+  border-radius: 2px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+`;
+
+const ProgressBar = styled.div`
+  height: 100%;
+  background: ${props => props.theme.colors.accent.green};
+  width: ${props => props.$progress}%;
 `;
 
 const ProcessButton = styled.button`
-  background-color: ${props => props.disabled ? '#888' : '#4CAF50'};
+  background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
   border: none;
-  border-radius: 0.25rem;
-  color: #fff;
-  cursor: pointer;
+  border-radius: ${props => props.theme.borderRadius.small};
+  color: ${props => props.theme.colors.background};
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
   font-size: 1rem;
-  padding: 0.75rem 1rem;
+  font-weight: ${props => props.theme.fontWeights.bold};
+  padding: 0.75rem 1.5rem;
+  width: 100%;
   transition: background-color 0.3s;
+  margin-top: 1.5rem;
+  font-family: ${props => props.theme.fonts.body};
 
   &:hover {
-    background-color: ${props => props.disabled ? '#888' : '#45a049'};
+    background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
+    opacity: ${props => props.disabled ? 1 : 0.9};
   }
 `;
 
-const DebugContainer = styled.div`
-  margin-top: 2rem;
+const ErrorMessage = styled.div`
+  background: ${props => props.theme.colors.error};
+  opacity: 0.1;
+  border: 1px solid ${props => props.theme.colors.error};
+  border-radius: ${props => props.theme.borderRadius.small};
+  color: ${props => props.theme.colors.error};
+  margin-bottom: 1rem;
   padding: 1rem;
-  background: #1a1a1a;
-  border-radius: 4px;
-  overflow: auto;
-  max-height: 300px;
+  font-family: ${props => props.theme.fonts.body};
 `;
 
-const DebugHeader = styled.div`
+const LoadingOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  justify-content: center;
+  z-index: 1000;
 `;
 
-const DebugTitle = styled.h4`
-  margin: 0;
-  color: #ddd;
+const LoadingCard = styled.div`
+  background: ${props => props.theme.colors.secondary};
+  border-radius: ${props => props.theme.borderRadius.medium};
+  padding: 2rem;
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
 `;
 
-const DebugToggle = styled.button`
-  background: none;
-  border: none;
-  color: #888;
-  cursor: pointer;
-  font-size: 0.875rem;
+const LoadingSpinner = styled.div`
+  margin-bottom: 1rem;
   
-  &:hover {
-    color: #ddd;
+  svg {
+    animation: spin 1.5s linear infinite;
+    width: 48px;
+    height: 48px;
+    color: ${props => props.theme.colors.primary};
   }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+const LoadingText = styled.p`
+  font-size: 1rem;
+  color: ${props => props.theme.colors.text.primary};
+  margin-bottom: 0.5rem;
+  font-family: ${props => props.theme.fonts.body};
+`;
+
+const LoadingSubText = styled.p`
+  font-size: 0.875rem;
+  color: ${props => props.theme.colors.text.secondary};
+  font-family: ${props => props.theme.fonts.body};
 `;
 
 const Upload = () => {
@@ -135,7 +267,75 @@ const Upload = () => {
   const [files, setFiles] = useState({});
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState(null);
-  const [showDebug, setShowDebug] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+  const dropZoneRef = useRef(null);
+  const fileListRef = useRef(null);
+
+  const fileTypes = [
+    {
+      id: 'trade_history',
+      name: 'Trade History',
+      required: true,
+      instructions: 'Account > Trade History > Export CSV',
+      filePrefix: 'trade_history',
+      color: '#4285F4', // Google blue
+      icon: 'document'
+    },
+    {
+      id: 'funding_history',
+      name: 'Funding History',
+      required: true,
+      instructions: 'Account > Funding History > Export CSV',
+      filePrefix: 'funding_history',
+      color: '#EA4335', // Google red
+      icon: 'document'
+    },
+    {
+      id: 'deposits_and_withdrawals',
+      name: 'Deposits & Withdrawals',
+      required: true,
+      instructions: 'Account > Deposits & Withdrawals > Export CSV',
+      filePrefix: 'deposits_and_withdrawals',
+      color: '#FBBC05', // Google yellow
+      icon: 'document'
+    },
+    {
+      id: 'staking_rewards',
+      name: 'Staking Rewards',
+      required: false,
+      instructions: 'Staking > Rewards > Export CSV',
+      filePrefix: 'rewardHistory',
+      color: '#34A853', // Google green
+      icon: 'document'
+    },
+    {
+      id: 'staking_actions',
+      name: 'Staking Actions',
+      required: false,
+      instructions: 'Staking > Actions > Export CSV',
+      filePrefix: 'actionHistory',
+      color: '#9C27B0', // Purple
+      icon: 'document'
+    }
+  ];
+
+  // Adjust drop zone height to match file list height
+  React.useEffect(() => {
+    const adjustHeight = () => {
+      if (dropZoneRef.current && fileListRef.current) {
+        const fileListHeight = fileListRef.current.offsetHeight;
+        dropZoneRef.current.style.height = `${fileListHeight}px`;
+      }
+    };
+
+    adjustHeight();
+    window.addEventListener('resize', adjustHeight);
+    
+    return () => {
+      window.removeEventListener('resize', adjustHeight);
+    };
+  }, [files]);
 
   const getFileByPrefix = (prefix) => {
     const fileName = Object.keys(files).find(name => name.startsWith(prefix));
@@ -144,25 +344,18 @@ const Upload = () => {
 
   const hasRequiredFiles = () => {
     const fileNames = Object.keys(files);
-    return fileNames.some(name => name.startsWith('trade_history')) &&
-           fileNames.some(name => name.startsWith('funding_history')) &&
-           fileNames.some(name => name.startsWith('deposits_and_withdrawals'));
+    return fileTypes
+      .filter(type => type.required)
+      .every(type => fileNames.some(name => name.startsWith(type.filePrefix)));
   };
 
   const handleFileUpload = async (e) => {
-    e.preventDefault();
-    const uploadedFiles = Array.from(e.target.files);
+    const uploadedFiles = Array.from(e.target.files || e.dataTransfer.files);
     if (uploadedFiles.length === 0) return;
 
-    setProcessing(true);
     setError(null);
 
     try {
-      // Clear localStorage when new files are uploaded
-      console.log('Clearing localStorage for new file upload');
-      // Clear both raw and processed data
-      FileUploader.clearProcessedData(true);
-
       const newFiles = {};
       for (const file of uploadedFiles) {
         try {
@@ -181,14 +374,32 @@ const Upload = () => {
     } catch (err) {
       console.error('Upload error:', err);
       setError(`Error processing files: ${err.message}`);
-    } finally {
-      setProcessing(false);
     }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileUpload(e);
   };
 
   const storeAndContinue = () => {
     try {
+      setProcessing(true);
       console.log('Starting storeAndContinue...');
+      
+      // Clear existing data before processing new files
+      FileUploader.clearLocalStorage();
       
       const tradeData = getFileByPrefix('trade_history');
       const fundingData = getFileByPrefix('funding_history');
@@ -234,19 +445,48 @@ const Upload = () => {
         tradesSampleLength: JSON.parse(storedTrades)?.length
       });
       
-      // Navigate to summary page
-      console.log('Storage complete, navigating to summary...');
-      navigate('/summary');
+      // Process the data and check for airdrops
+      FileUploader.processData(
+        JSON.parse(storedTrades),
+        JSON.parse(storedFunding),
+        JSON.parse(storedDeposits),
+        storedStakingRewards ? JSON.parse(storedStakingRewards) : [],
+        storedStakingActions ? JSON.parse(storedStakingActions) : []
+      ).then(result => {
+        // Don't store the timeline in localStorage as it's too big
+        // Instead, check for airdrops directly in the deposits data
+        
+        // Check if there are any airdrops in the deposits data
+        const depositsData = JSON.parse(storedDeposits);
+        const hasAirdrops = depositsData.some(entry => 
+          entry.action === 'genesis.distribution'
+        );
+        
+        // Navigate to airdrop config if airdrops are found, otherwise go to summary
+        setTimeout(() => {
+          if (hasAirdrops) {
+            navigate('/airdrop-config');
+          } else {
+            navigate('/summary');
+          }
+          setProcessing(false);
+        }, 1000);
+      }).catch(error => {
+        console.error('Error processing data:', error);
+        setError(`Error processing data: ${error.message}`);
+        setProcessing(false);
+      });
     } catch (error) {
       console.error('Error in storeAndContinue:', error);
       setError(`Error storing files: ${error.message}`);
+      setProcessing(false);
     }
   };
 
-  const clearFile = (prefix) => {
+  const clearFile = (filePrefix) => {
     setFiles(prevFiles => {
       const newFiles = { ...prevFiles };
-      const fileToRemove = Object.keys(newFiles).find(name => name.startsWith(prefix));
+      const fileToRemove = Object.keys(newFiles).find(name => name.startsWith(filePrefix));
       if (fileToRemove) {
         delete newFiles[fileToRemove];
       }
@@ -254,122 +494,122 @@ const Upload = () => {
     });
   };
 
+  const getUploadedFileForType = (filePrefix) => {
+    return Object.keys(files).find(name => name.startsWith(filePrefix));
+  };
+
+  const getFileIcon = (fileType) => {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    );
+  };
+
   return (
     <Container>
-      <StepIndicator>Step 1 of 2</StepIndicator>
-      <Title>Upload Your Trade Data</Title>
+      <Header>
+        <Title>File Upload</Title>
+      </Header>
       
-      <FileUploadSection>
-        <RequiredFiles>
-          <div className="font-medium mb-2">Required Files:</div>
-          <FileStatusRow>
-            <FileStatus $isUploaded={Object.keys(files).some(name => name.startsWith('trade_history'))}>
-              Trades
-            </FileStatus>
-            {Object.keys(files).some(name => name.startsWith('trade_history')) && (
-              <ClearFileButton onClick={() => clearFile('trade_history')}>×</ClearFileButton>
-            )}
-          </FileStatusRow>
-          
-          <FileStatusRow>
-            <FileStatus $isUploaded={Object.keys(files).some(name => name.startsWith('funding_history'))}>
-              Funding
-            </FileStatus>
-            {Object.keys(files).some(name => name.startsWith('funding_history')) && (
-              <ClearFileButton onClick={() => clearFile('funding_history')}>×</ClearFileButton>
-            )}
-          </FileStatusRow>
-          
-          <FileStatusRow>
-            <FileStatus $isUploaded={Object.keys(files).some(name => name.startsWith('deposits_and_withdrawals'))}>
-              Deposits & Withdrawals
-            </FileStatus>
-            {Object.keys(files).some(name => name.startsWith('deposits_and_withdrawals')) && (
-              <ClearFileButton onClick={() => clearFile('deposits_and_withdrawals')}>×</ClearFileButton>
-            )}
-          </FileStatusRow>
-          
-          <div className="font-medium mb-2 mt-4">Optional:</div>
-          <FileStatusRow>
-            <FileStatus $isUploaded={Object.keys(files).some(name => name.startsWith('rewardHistory'))}>
-              Staking Rewards
-            </FileStatus>
-            {Object.keys(files).some(name => name.startsWith('rewardHistory')) && (
-              <ClearFileButton onClick={() => clearFile('rewardHistory')}>×</ClearFileButton>
-            )}
-          </FileStatusRow>
-          
-          <FileStatusRow>
-            <FileStatus $isUploaded={Object.keys(files).some(name => name.startsWith('actionHistory'))}>
-              Staking Actions
-            </FileStatus>
-            {Object.keys(files).some(name => name.startsWith('actionHistory')) && (
-              <ClearFileButton onClick={() => clearFile('actionHistory')}>×</ClearFileButton>
-            )}
-          </FileStatusRow>
-        </RequiredFiles>
-
-        <FileInput 
-          type="file" 
-          onChange={handleFileUpload}
-          accept=".csv"
-          multiple
-        />
-
-        {processing && (
-          <LoadingSpinner>
-            <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <span>Processing...</span>
-          </LoadingSpinner>
-        )}
-
+      <UploadCard>
+        
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          <ErrorMessage>
             {error}
-          </div>
+          </ErrorMessage>
         )}
-
+        
+        <UploadContent>
+          <DropZoneContainer>
+            <DropZone 
+              ref={dropZoneRef}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              style={{
+                borderColor: isDragging ? props => props.theme.colors.primary : props => props.theme.colors.text.secondary
+              }}
+            >
+              <UploadIcon>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </UploadIcon>
+              <DropText>
+                Drop your files here.
+              </DropText>
+              <DropText>
+                or <BrowseText onClick={() => fileInputRef.current.click()}>Browse</BrowseText>
+              </DropText>
+              <FileFormatText>CSV files only (max size 40MB)</FileFormatText>
+              <HiddenInput 
+                type="file" 
+                ref={fileInputRef}
+                accept=".csv"
+                multiple
+                onChange={handleFileUpload}
+              />
+            </DropZone>
+          </DropZoneContainer>
+          
+          <FileStatusContainer>
+            <FileStatusList ref={fileListRef}>
+              {fileTypes.map(fileType => {
+                const uploadedFile = getUploadedFileForType(fileType.filePrefix);
+                const isUploaded = !!uploadedFile;
+                
+                return (
+                  <FileStatusItem key={fileType.id} $isUploaded={isUploaded}>
+                    <FileTypeIcon $color={fileType.color}>
+                      {getFileIcon(fileType)}
+                    </FileTypeIcon>
+                    <FileTypeDetails>
+                      <FileTypeName>
+                        {fileType.name}
+                        <RequiredBadge $isRequired={fileType.required}>
+                          {fileType.required ? 'Required' : 'Optional'}
+                        </RequiredBadge>
+                      </FileTypeName>
+                      <FileTypeStatus $isUploaded={isUploaded}>
+                        {isUploaded 
+                          ? `${uploadedFile} (${files[uploadedFile].length} rows)` 
+                          : fileType.instructions}
+                      </FileTypeStatus>
+                      {isUploaded && (
+                        <FileProgress>
+                          <ProgressBar $progress={100} />
+                        </FileProgress>
+                      )}
+                    </FileTypeDetails>
+                  </FileStatusItem>
+                );
+              })}
+            </FileStatusList>
+          </FileStatusContainer>
+        </UploadContent>
+        
         <ProcessButton 
           onClick={storeAndContinue} 
           disabled={!hasRequiredFiles() || processing}
         >
-          {processing ? 'Processing...' : 'Process Files'}
+          Process Files
         </ProcessButton>
-        
-        {Object.keys(files).length > 0 && (
-          <DebugContainer>
-            <DebugHeader>
-              <DebugTitle>Debug: Parsed CSV Data</DebugTitle>
-              <DebugToggle onClick={() => setShowDebug(!showDebug)}>
-                {showDebug ? 'Hide' : 'Show'}
-              </DebugToggle>
-            </DebugHeader>
-            
-            {showDebug && (
-              <div>
-                {Object.entries(files).map(([filename, data]) => (
-                  <div key={filename} style={{ marginBottom: '1rem' }}>
-                    <h5 style={{ color: '#aaa', marginBottom: '0.5rem' }}>{filename}</h5>
-                    <div style={{ fontSize: '0.75rem' }}>
-                      <div>Row count: {data.length}</div>
-                      <div>Columns: {data[0] ? Object.keys(data[0]).join(', ') : 'No data'}</div>
-                      <details>
-                        <summary style={{ cursor: 'pointer', color: '#888' }}>First row</summary>
-                        <pre style={{ color: '#ddd', overflow: 'auto' }}>
-                          {JSON.stringify(data[0], null, 2)}
-                        </pre>
-                      </details>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </DebugContainer>
-        )}
-      </FileUploadSection>
+      </UploadCard>
+      
+      {processing && (
+        <LoadingOverlay>
+          <LoadingCard>
+            <LoadingSpinner>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </LoadingSpinner>
+            <LoadingText>Processing your files...</LoadingText>
+            <LoadingSubText>This may take a few moments</LoadingSubText>
+          </LoadingCard>
+        </LoadingOverlay>
+      )}
     </Container>
   );
 };

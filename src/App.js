@@ -8,6 +8,7 @@ import Summary from './components/Tax/Summary';
 import GlobalStyle from './GlobalStyle';
 import DriftErrorPage from './components/DriftErrorPage';
 import Upload from './components/Tax/Upload';
+import AirdropConfig from './components/Tax/AirdropConfig';
 
 const Nav = styled.nav`
   padding: 1rem;
@@ -72,6 +73,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/upload" replace />} />
             <Route path="/upload" element={<Upload />} />
+            <Route path="/airdrop-config" element={<AirdropConfig />} />
             <Route path="/summary" element={<Summary />} />
             <Route path="/ratio" element={<RatioMeter />} />
             <Route path="/calculator" element={<Navigate to="/calculator/solana" replace />} />

@@ -13,6 +13,7 @@ const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
   color: ${props => props.theme.colors.text.primary};
+  font-family: ${props => props.theme.fonts.body};
   
   @media (min-width: 768px) {
     padding: 2rem;
@@ -46,8 +47,9 @@ const Table = styled.table`
   }
 
   th {
-    font-weight: 500;
+    font-weight: ${props => props.theme.fontWeights.bold};
     color: ${props => props.theme.colors.text.secondary};
+    font-family: ${props => props.theme.fonts.body};
   }
 
   td {
@@ -56,30 +58,28 @@ const Table = styled.table`
 
   // Responsive percentage-based column widths
   th:nth-child(1), td:nth-child(1) { width: 15%; } /* Date */
-  th:nth-child(2), td:nth-child(2) { width: 20%; } /* Label */
+  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Label - increased width */
   th:nth-child(3), td:nth-child(3) { width: 20%; } /* Sent */
   th:nth-child(4), td:nth-child(4) { width: 20%; } /* Received */
-  th:nth-child(5), td:nth-child(5) { width: 12%; } /* Fee */
-  th:nth-child(6), td:nth-child(6) { width: 10%; } /* Gain */
-  th:nth-child(7), td:nth-child(7) { width: 3%; } /* Icon */
+  th:nth-child(5), td:nth-child(5) { width: 17%; } /* Fee - increased width */
+  th:nth-child(6), td:nth-child(6) { width: 3%; } /* Icon */
 
   @media (max-width: 768px) {
     th:nth-child(1), td:nth-child(1) { width: 20%; } /* Date gets slightly wider on mobile */
-    th:nth-child(2), td:nth-child(2) { width: 25%; } /* Label gets slightly wider on mobile */
-    th:nth-child(3), td:nth-child(3) { width: 15%; } /* Sent gets slightly narrower */
-    th:nth-child(4), td:nth-child(4) { width: 15%; } /* Received gets slightly narrower */
-    th:nth-child(5), td:nth-child(5) { width: 12%; } /* Fee stays the same */
-    th:nth-child(6), td:nth-child(6) { width: 10%; } /* Gain stays the same */
-    th:nth-child(7), td:nth-child(7) { width: 3%; } /* Icon stays the same */
+    th:nth-child(2), td:nth-child(2) { width: 25%; } /* Label */
+    th:nth-child(3), td:nth-child(3) { width: 18%; } /* Sent */
+    th:nth-child(4), td:nth-child(4) { width: 18%; } /* Received */
+    th:nth-child(5), td:nth-child(5) { width: 16%; } /* Fee */
+    th:nth-child(6), td:nth-child(6) { width: 3%; } /* Icon */
   }
 `;
 
 const DateCell = styled.td`
   .date {
-    font-weight: 500;
+    font-weight: ${props => props.theme.fontWeights.bold};
   }
   .time {
-    color: #888;
+    color: ${props => props.theme.colors.text.secondary};
     font-size: 0.8rem;
   }
 `;
@@ -89,17 +89,17 @@ const LabelTag = styled.div`
   flex-direction: column;
   gap: 4px;
   
-  .category {
-    font-weight: 600;
+  .eventLabel {
+    font-weight: ${props => props.theme.fontWeights.bold};
     font-size: 0.8rem;
   }
   
-  .subcategory {
+  .tag {
     font-size: 0.7rem;
     padding: 2px 6px;
-    border-radius: 3px;
-    background-color: rgba(128, 128, 128, 0.15);
-    color: #666;
+    border-radius: ${props => props.theme.borderRadius.small};
+    background-color: ${props => props.theme.colors.secondary};
+    color: ${props => props.theme.colors.text.secondary};
     display: inline-block;
   }
 `;
@@ -108,16 +108,17 @@ const StartOverButton = styled.button`
   position: fixed;
   top: 1rem;
   right: 1rem;
-  background: #2a2a2a;
-  border: 1px solid #333;
-  color: #fff;
+  background: ${props => props.theme.colors.secondary};
+  border: 1px solid ${props => props.theme.colors.secondary};
+  color: ${props => props.theme.colors.text.primary};
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: ${props => props.theme.borderRadius.small};
   cursor: pointer;
   z-index: 100;
+  font-family: ${props => props.theme.fonts.body};
   
   &:hover {
-    background: #333;
+    background: ${props => props.theme.colors.background};
   }
 `;
 
@@ -134,7 +135,8 @@ const FilterInput = styled.input`
   border: 1px solid ${props => props.theme.colors.secondary};
   color: ${props => props.theme.colors.text.primary};
   padding: 0.5rem;
-  border-radius: 4px;
+  border-radius: ${props => props.theme.borderRadius.small};
+  font-family: ${props => props.theme.fonts.body};
 `;
 
 const FilterSelect = styled.select`
@@ -142,24 +144,28 @@ const FilterSelect = styled.select`
   border: 1px solid ${props => props.theme.colors.secondary};
   color: ${props => props.theme.colors.text.primary};
   padding: 0.5rem;
-  border-radius: 4px;
+  border-radius: ${props => props.theme.borderRadius.small};
+  font-family: ${props => props.theme.fonts.body};
 `;
 
 const ErrorMessage = styled.div`
-  color: #EF4444;
+  color: ${props => props.theme.colors.error};
   margin-bottom: 1rem;
   padding: 1rem;
-  background: rgba(239, 68, 68, 0.1);
-  border-radius: 4px;
+  background: rgba(234, 57, 67, 0.1);
+  border-radius: ${props => props.theme.borderRadius.small};
+  font-family: ${props => props.theme.fonts.body};
 `;
 
 const DescriptionRow = styled.tr`
-  background-color: rgba(128, 128, 128, 0.1);
+  background-color: ${props => props.theme.colors.secondary};
+  opacity: 0.5;
   
   td {
     padding: 0.75rem;
     font-size: 0.8rem;
     color: ${props => props.theme.colors.text.secondary};
+    font-family: ${props => props.theme.fonts.body};
   }
 
   td:first-child {
@@ -174,8 +180,8 @@ const DescriptionRow = styled.tr`
     font-family: monospace;
     font-size: 0.75rem;
     padding: 0.5rem;
-    background-color: rgba(0, 0, 0, 0.1);
-    border-radius: 4px;
+    background-color: ${props => props.theme.colors.background};
+    border-radius: ${props => props.theme.borderRadius.small};
     white-space: pre-wrap;
     overflow-x: auto;
   }
@@ -183,10 +189,12 @@ const DescriptionRow = styled.tr`
 
 const TransactionRow = styled.tr`
   cursor: pointer;
-  background-color: ${props => props.$isInternalTransfer ? 'rgba(128, 128, 128, 0.1)' : 'transparent'};
+  background-color: ${props => props.$isInternalTransfer ? props.theme.colors.secondary : 'transparent'};
+  opacity: ${props => props.$isInternalTransfer ? 0.7 : 1};
   
   &:hover {
-    background-color: ${props => props.$isInternalTransfer ? 'rgba(128, 128, 128, 0.15)' : 'rgba(128, 128, 128, 0.1)'};
+    background-color: ${props => props.$isInternalTransfer ? props.theme.colors.secondary : props.theme.colors.secondary};
+    opacity: ${props => props.$isInternalTransfer ? 0.9 : 0.7};
   }
 `;
 
@@ -197,7 +205,7 @@ const SortableHeader = styled.th`
   padding-right: 1.5rem !important;
 
   &:hover {
-    background-color: rgba(128, 128, 128, 0.1);
+    background-color: ${props => props.theme.colors.secondary};
   }
 
   .sort-indicator {
@@ -229,8 +237,22 @@ const Summary = () => {
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [availableCoins, setAvailableCoins] = useState([]);
 
+  // Add a ref to track if we're already processing
+  const isProcessingRef = React.useRef(false);
+
   const processData = useCallback(async () => {
+    // Guard against concurrent processing
+    if (isProcessingRef.current) {
+      console.log('Already processing data, skipping...');
+      return;
+    }
+
     try {
+      console.log('Starting data processing...');
+      isProcessingRef.current = true;
+      setIsLoading(true);
+      setError(null);
+      
       // Get raw data from localStorage
       const rawTrades = localStorage.getItem('rawTradeData');
       const rawFunding = localStorage.getItem('rawFundingData');
@@ -239,12 +261,16 @@ const Summary = () => {
       const rawStakingActions = localStorage.getItem('rawStakingActionsData');
 
       if (!rawTrades || !rawFunding || !rawDeposits) {
+        const error = 'No raw data found. Please upload files again.';
+        console.error(error);
+        setError(error);
+        setIsLoading(false);
         navigate('/');
         return;
       }
 
       // Process the raw data
-      const result = await FileUploader.storeProcessedData(
+      const result = await FileUploader.processData(
         JSON.parse(rawTrades),
         JSON.parse(rawFunding),
         JSON.parse(rawDeposits),
@@ -253,12 +279,15 @@ const Summary = () => {
       );
       
       // Set timeline directly in state
+      console.log('Processing complete, updating UI...');
       setTimeline(result.timeline);
       setIsLoading(false);
     } catch (error) {
       console.error('Error in processData:', error);
       setError(`Error processing data: ${error.message}`);
       setIsLoading(false);
+    } finally {
+      isProcessingRef.current = false;
     }
   }, [navigate]);
 
@@ -276,11 +305,7 @@ const Summary = () => {
     setAvailableCoins(Array.from(coins).sort());
   }, [timeline]);
 
-  const handleStartOver = () => {
-    // Clear ALL localStorage items
-    localStorage.clear();
-    
-    // Navigate to upload page
+  const handleStartOver = () => {    // Navigate to upload page
     navigate('/upload');
   };
 
@@ -364,7 +389,7 @@ const Summary = () => {
         case 'time':
           return direction * (new Date(a.time) - new Date(b.time));
         case 'label':
-          return direction * (a.display.category.localeCompare(b.display.category));
+          return direction * (a.display.eventLabel.localeCompare(b.display.eventLabel));
         case 'sent': {
           const aValue = parseFloat(a.display.sentAmount) || 0;
           const bValue = parseFloat(b.display.sentAmount) || 0;
@@ -392,62 +417,23 @@ const Summary = () => {
     return sorted;
   }, [filteredTimeline, sortConfig]);
 
-  const handleReprocess = async () => {
+  const handleExportToKoinly = () => {
     try {
-      console.log('Starting reprocess...');
-      setIsLoading(true);
-      setError(null);
-      
-      // Clear all processed data from localStorage
-      FileUploader.clearProcessedData(false);
-      
-      const trades = localStorage.getItem('rawTradeData');
-      const funding = localStorage.getItem('rawFundingData');
-      const deposits = localStorage.getItem('rawDepositsData');
-      const stakingRewards = localStorage.getItem('rawStakingRewardsData');
-      const stakingActions = localStorage.getItem('rawStakingActionsData');
-
-      console.log('Raw data for reprocessing:', {
-        hasRawTrades: !!trades,
-        hasRawFunding: !!funding,
-        hasRawDeposits: !!deposits,
-        hasRawStakingRewards: !!stakingRewards,
-        hasRawStakingActions: !!stakingActions
-      });
-
-      if (!trades || !funding || !deposits) {
-        const error = 'No raw data found. Please upload files again.';
-        console.error(error);
-        setError(error);
-        setIsLoading(false);
-        return;
-      }
-
-      console.log('Starting reprocessing of data...');
-      const result = await FileUploader.storeProcessedData(
-        JSON.parse(trades),
-        JSON.parse(funding),
-        JSON.parse(deposits),
-        stakingRewards ? JSON.parse(stakingRewards) : [],
-        stakingActions ? JSON.parse(stakingActions) : []
-      );
-      
-      console.log('Reprocessing complete, updating UI...');
-      setTimeline(result.timeline);
-      setIsLoading(false);
+      FileUploader.downloadKoinlyCSV(timeline);
     } catch (error) {
-      const errorMessage = `Error reprocessing data: ${error.message}`;
-      console.error(errorMessage);
-      setError(errorMessage);
-      setIsLoading(false);
+      setError(`Error exporting to Koinly: ${error.message}`);
     }
   };
 
-  const handleExportToKoinly = () => {
+  const handleGenerateTestCSV = () => {
     try {
-      FileUploader.downloadKoinlyCSV();
+      const tokenAddressMap = JSON.parse(localStorage.getItem('tokenAddressMap'));
+      if (!tokenAddressMap) {
+        throw new Error('No token address map found. Please process data first.');
+      }
+      FileUploader.generateTestKoinlyCSV(tokenAddressMap);
     } catch (error) {
-      setError(`Error exporting to Koinly: ${error.message}`);
+      setError(`Error generating test CSV: ${error.message}`);
     }
   };
 
@@ -542,7 +528,7 @@ const Summary = () => {
         Start Over
       </StartOverButton>
       <StartOverButton 
-        onClick={handleReprocess}
+        onClick={processData}
         style={{ right: '120px' }}
       >
         Reprocess
@@ -552,6 +538,12 @@ const Summary = () => {
         style={{ right: '220px', background: '#4CAF50', borderColor: '#45a049' }}
       >
         Export for Koinly
+      </StartOverButton>
+      <StartOverButton 
+        onClick={handleGenerateTestCSV}
+        style={{ right: '360px', background: '#2196F3', borderColor: '#1976D2' }}
+      >
+        Generate Test CSV
       </StartOverButton>
 
       <TableContainer>
@@ -641,6 +633,7 @@ const Summary = () => {
                   {sortConfig.key === 'fee' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
                 </span>
               </SortableHeader>
+              {/* Commenting out Gain column for now
               <SortableHeader 
                 onClick={() => handleSort('gain')}
                 $active={sortConfig.key === 'gain'}
@@ -650,6 +643,7 @@ const Summary = () => {
                   {sortConfig.key === 'gain' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
                 </span>
               </SortableHeader>
+              */}
               <th></th>
             </tr>
           </thead>
@@ -679,9 +673,9 @@ const Summary = () => {
                       </DateCell>
                       <td>
                         <LabelTag>
-                          <span className="category">{event.display.category}</span>
+                          <span className="eventLabel">{event.display.eventLabel}</span>
                           {event.koinly.tag && (
-                            <span className="subcategory">{event.koinly.tag}</span>
+                            <span className="tag">{event.koinly.tag}</span>
                           )}
                         </LabelTag>
                       </td>
@@ -700,9 +694,11 @@ const Summary = () => {
                           `${formatNumber(event.display.feeAmount)} ${event.display.feeCurrency}`
                         )}
                       </td>
+                      {/* Commenting out Gain column for now
                       <td style={{ color: parseFloat(event.display.pnl || 0) >= 0 ? '#4CAF50' : '#FF5252' }}>
                         {event.display.pnl ? `$${formatNumber(event.display.pnl)}` : '-'}
                       </td>
+                      */}
                       <td>
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ transform: expandedRows.has(rowIndex) ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
                           <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
@@ -714,6 +710,15 @@ const Summary = () => {
                         <td></td>
                         <td colSpan="6">
                           <div className="description">{event.display.description}</div>
+                          {event.details?.transfer?.action === 'genesis.distribution' && (
+                            <div className="airdrop-info" style={{ marginTop: '0.5rem', color: props => props.theme.colors.accent.green }}>
+                              <strong>Airdrop Cost Basis:</strong> {
+                                event.display.netWorthAmount 
+                                  ? `$${event.display.netWorthAmount} ${event.display.netWorthCurrency || 'USD'}`
+                                  : 'Not set'
+                              }
+                            </div>
+                          )}
                           <div className="raw-data">{JSON.stringify(event, null, 2)}</div>
                         </td>
                       </DescriptionRow>
