@@ -2,6 +2,29 @@ import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { FileUploader } from '../../services/FileUploader';
+import hlAnimatedGif from '../../images/hl-animated.gif';
+import StandardTable from '../UI/StandardTable';
+import WizardNavigation, { WizardButton, LeftArrowIcon, RightArrowIcon } from '../UI/WizardNavigation';
+
+// Styled components for the animated logo and eyebrow
+const AnimatedLogo = styled.img`
+  width: 25px;
+  height: auto;
+  margin-bottom: 0.5rem;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+`;
+
+const Title = styled.h1`
+  font-size: 2.25rem;
+  margin-bottom: 3rem;
+  text-align: center;
+
+  @media (min-width: 768px) {
+    font-size: 3rem;
+  }
+`;
 
 // Keep only the styled components that are being used
 const Container = styled.div`
@@ -9,6 +32,7 @@ const Container = styled.div`
   flex-direction: column;
   align-items: center;
   padding: 1rem;
+  padding-bottom: 5rem;
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
@@ -17,66 +41,14 @@ const Container = styled.div`
   
   @media (min-width: 768px) {
     padding: 2rem;
+    padding-bottom: 5rem;
   }
 `;
 
-const TableContainer = styled.div`
-  width: 100%;
-  margin-top: 1rem;
-  
-  @media (min-width: 768px) {
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-  }
-`;
-
-const Table = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 2rem;
-  table-layout: fixed;
-  
-  th, td {
-    padding: 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid ${props => props.theme.colors.secondary};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  th {
-    font-weight: ${props => props.theme.fontWeights.bold};
-    color: ${props => props.theme.colors.text.secondary};
-    font-family: ${props => props.theme.fonts.body};
-  }
-
-  td {
-    font-family: monospace;
-  }
-
-  // Responsive percentage-based column widths
-  th:nth-child(1), td:nth-child(1) { width: 15%; } /* Date */
-  th:nth-child(2), td:nth-child(2) { width: 25%; } /* Label - increased width */
-  th:nth-child(3), td:nth-child(3) { width: 20%; } /* Sent */
-  th:nth-child(4), td:nth-child(4) { width: 20%; } /* Received */
-  th:nth-child(5), td:nth-child(5) { width: 17%; } /* Fee - increased width */
-  th:nth-child(6), td:nth-child(6) { width: 3%; } /* Icon */
-
-  @media (max-width: 768px) {
-    th:nth-child(1), td:nth-child(1) { width: 20%; } /* Date gets slightly wider on mobile */
-    th:nth-child(2), td:nth-child(2) { width: 25%; } /* Label */
-    th:nth-child(3), td:nth-child(3) { width: 18%; } /* Sent */
-    th:nth-child(4), td:nth-child(4) { width: 18%; } /* Received */
-    th:nth-child(5), td:nth-child(5) { width: 16%; } /* Fee */
-    th:nth-child(6), td:nth-child(6) { width: 3%; } /* Icon */
-  }
-`;
-
-const DateCell = styled.td`
+const DateCell = styled.div`
   .date {
     font-weight: ${props => props.theme.fontWeights.bold};
+    font-size: 0.9rem;
   }
   .time {
     color: ${props => props.theme.colors.text.secondary};
@@ -88,73 +60,37 @@ const LabelTag = styled.div`
   display: inline-flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%; /* Ensure it takes full width of the cell */
   
   .eventLabel {
     font-weight: ${props => props.theme.fontWeights.bold};
-    font-size: 0.8rem;
+    font-size: 0.9rem;
+    color: ${props => props.theme.colors.primary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   
   .tag {
     font-size: 0.7rem;
     padding: 2px 6px;
     border-radius: ${props => props.theme.borderRadius.small};
-    background-color: ${props => props.theme.colors.secondary};
+    background-color: ${props => props.theme.colors.background};
     color: ${props => props.theme.colors.text.secondary};
     display: inline-block;
+    max-width: fit-content;
   }
 `;
 
-const StartOverButton = styled.button`
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  background: ${props => props.theme.colors.secondary};
-  border: 1px solid ${props => props.theme.colors.secondary};
-  color: ${props => props.theme.colors.text.primary};
-  padding: 8px 16px;
-  border-radius: ${props => props.theme.borderRadius.small};
+const TransactionRow = styled.tr`
   cursor: pointer;
-  z-index: 100;
-  font-family: ${props => props.theme.fonts.body};
+  background-color: ${props => props.$isInternalTransfer ? props.theme.colors.secondary : 'transparent'};
+  opacity: ${props => props.$isInternalTransfer ? 0.7 : 1};
   
   &:hover {
-    background: ${props => props.theme.colors.background};
+    background-color: ${props => props.$isInternalTransfer ? props.theme.colors.secondary : props.theme.colors.secondary};
+    opacity: ${props => props.$isInternalTransfer ? 0.9 : 0.7};
   }
-`;
-
-const FilterContainer = styled.div`
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  align-items: center;
-  flex-wrap: wrap;
-`;
-
-const FilterInput = styled.input`
-  background: ${props => props.theme.colors.background};
-  border: 1px solid ${props => props.theme.colors.secondary};
-  color: ${props => props.theme.colors.text.primary};
-  padding: 0.5rem;
-  border-radius: ${props => props.theme.borderRadius.small};
-  font-family: ${props => props.theme.fonts.body};
-`;
-
-const FilterSelect = styled.select`
-  background: ${props => props.theme.colors.background};
-  border: 1px solid ${props => props.theme.colors.secondary};
-  color: ${props => props.theme.colors.text.primary};
-  padding: 0.5rem;
-  border-radius: ${props => props.theme.borderRadius.small};
-  font-family: ${props => props.theme.fonts.body};
-`;
-
-const ErrorMessage = styled.div`
-  color: ${props => props.theme.colors.error};
-  margin-bottom: 1rem;
-  padding: 1rem;
-  background: rgba(234, 57, 67, 0.1);
-  border-radius: ${props => props.theme.borderRadius.small};
-  font-family: ${props => props.theme.fonts.body};
 `;
 
 const DescriptionRow = styled.tr`
@@ -187,34 +123,13 @@ const DescriptionRow = styled.tr`
   }
 `;
 
-const TransactionRow = styled.tr`
-  cursor: pointer;
-  background-color: ${props => props.$isInternalTransfer ? props.theme.colors.secondary : 'transparent'};
-  opacity: ${props => props.$isInternalTransfer ? 0.7 : 1};
-  
-  &:hover {
-    background-color: ${props => props.$isInternalTransfer ? props.theme.colors.secondary : props.theme.colors.secondary};
-    opacity: ${props => props.$isInternalTransfer ? 0.9 : 0.7};
-  }
-`;
-
-const SortableHeader = styled.th`
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  padding-right: 1.5rem !important;
-
-  &:hover {
-    background-color: ${props => props.theme.colors.secondary};
-  }
-
-  .sort-indicator {
-    position: absolute;
-    right: 0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: ${props => props.$active ? 1 : 0.3};
-  }
+const ErrorMessage = styled.div`
+  color: ${props => props.theme.colors.error};
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: rgba(234, 57, 67, 0.1);
+  border-radius: ${props => props.theme.borderRadius.small};
+  font-family: ${props => props.theme.fonts.body};
 `;
 
 const Summary = () => {
@@ -243,12 +158,10 @@ const Summary = () => {
   const processData = useCallback(async () => {
     // Guard against concurrent processing
     if (isProcessingRef.current) {
-      console.log('Already processing data, skipping...');
       return;
     }
 
     try {
-      console.log('Starting data processing...');
       isProcessingRef.current = true;
       setIsLoading(true);
       setError(null);
@@ -279,7 +192,6 @@ const Summary = () => {
       );
       
       // Set timeline directly in state
-      console.log('Processing complete, updating UI...');
       setTimeline(result.timeline);
       setIsLoading(false);
     } catch (error) {
@@ -299,8 +211,14 @@ const Summary = () => {
     // Extract unique coins from timeline
     const coins = new Set();
     timeline.forEach(event => {
-      if (event.coin) coins.add(event.coin);
-      if (event.asset) coins.add(event.asset);
+      // Check all possible locations for coin information
+      [
+        event.display?.sentCurrency,
+        event.display?.receivedCurrency,
+        event.display?.feeCurrency,
+      ].forEach(coin => {
+        if (coin) coins.add(coin);
+      });
     });
     setAvailableCoins(Array.from(coins).sort());
   }, [timeline]);
@@ -333,11 +251,25 @@ const Summary = () => {
     }
     
     if (filterConfig.coin) {
-      const eventCoin = event.details.trade?.coin || 
-                       event.details.funding?.coin || 
-                       event.details.transfer?.coin || 
-                       event.details.staking?.coin;
-      if (!eventCoin || !eventCoin.toLowerCase().includes(filterConfig.coin.toLowerCase())) return false;
+      // Extract coin information from various places in the event object
+      const eventCoins = [
+        event.display?.sentCurrency,
+        event.display?.receivedCurrency,
+        event.display?.feeCurrency,
+        event.details?.trade?.coin,
+        event.details?.funding?.coin,
+        event.details?.transfer?.coin,
+        event.details?.staking?.coin,
+        event.coin,
+        event.asset
+      ].filter(Boolean); // Filter out undefined/null values
+      
+      // Check if any of the coins match the filter
+      if (!eventCoins.some(coin => 
+        coin && coin.toLowerCase().includes(filterConfig.coin.toLowerCase())
+      )) {
+        return false;
+      }
     }
     
     if (filterConfig.startDate) {
@@ -419,9 +351,19 @@ const Summary = () => {
 
   const handleExportToKoinly = () => {
     try {
-      FileUploader.downloadKoinlyCSV(timeline);
+      const result = FileUploader.downloadKoinlyCSV(timeline);
+      
+      // Store the result in localStorage for the guide to use
+      if (result) {
+        localStorage.setItem('lastExportResult', JSON.stringify(result));
+      }
+      
+      // Show success message and offer to navigate to guide
+      navigate('/koinly-guide', { state: { timeline } });
+
     } catch (error) {
-      setError(`Error exporting to Koinly: ${error.message}`);
+      console.error('Export failed:', error);
+      setError(`Export failed: ${error.message}`);
     }
   };
 
@@ -447,6 +389,173 @@ const Summary = () => {
       }
       return newSet;
     });
+  };
+
+  // Define columns for the StandardTable
+  const columns = [
+    { 
+      id: 'time', 
+      label: 'Date', 
+      sortable: true,
+      render: (item) => {
+        const date = new Date(item.time);
+        const formattedDate = date.getDate() + ' ' + 
+          date.toLocaleString('en-US', { month: 'short' }) + ' ' + 
+          date.getFullYear().toString().substr(-2);
+        const formattedTime = date.getHours().toString().padStart(2, '0') + ':' + 
+          date.getMinutes().toString().padStart(2, '0') + ':' + 
+          date.getSeconds().toString().padStart(2, '0');
+        
+        return (
+          <DateCell>
+            <div className="date">{formattedDate}</div>
+            <div className="time">{formattedTime}</div>
+          </DateCell>
+        );
+      }
+    },
+    { 
+      id: 'label', 
+      label: 'Label', 
+      sortable: true,
+      render: (item) => (
+        <LabelTag>
+          <span className="eventLabel">{item.display.eventLabel}</span>
+          {item.koinly.tag && (
+            <span className="tag">{item.koinly.tag}</span>
+          )}
+        </LabelTag>
+      )
+    },
+    { 
+      id: 'sent', 
+      label: 'Sent', 
+      sortable: true,
+      render: (item) => item.display.sentAmount && (
+        `${formatNumber(item.display.sentAmount)} ${item.display.sentCurrency}`
+      )
+    },
+    { 
+      id: 'received', 
+      label: 'Received', 
+      sortable: true,
+      render: (item) => item.display.receivedAmount && (
+        `${formatNumber(item.display.receivedAmount)} ${item.display.receivedCurrency}`
+      )
+    },
+    { 
+      id: 'fee', 
+      label: 'Fee', 
+      sortable: true,
+      render: (item) => item.display.feeAmount && (
+        `${formatNumber(item.display.feeAmount)} ${item.display.feeCurrency}`
+      )
+    },
+    { 
+      id: 'actions', 
+      label: '', 
+      sortable: false,
+      render: (item) => (
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ transform: expandedRows.has(item.id) ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+          <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+        </svg>
+      )
+    }
+  ];
+
+  // Prepare filters for StandardTable
+  const filters = {
+    dateFilters: [
+      {
+        id: 'startDate',
+        label: 'From:',
+        value: filterConfig.startDate,
+        type: 'date'
+      },
+      {
+        id: 'endDate',
+        label: 'To:',
+        value: filterConfig.endDate,
+        type: 'date'
+      }
+    ],
+    mainFilters: [
+      {
+        id: 'eventType',
+        label: 'Event Type:',
+        value: filterConfig.eventType,
+        type: 'select',
+        options: [
+          { value: '', label: 'All Event Types' },
+          { value: 'spot_trade', label: 'Spot Trades' },
+          { value: 'perp_trade', label: 'Perp Trades' },
+          { value: 'transfer', label: 'Transfers' },
+          { value: 'funding', label: 'Funding' },
+          { value: 'staking', label: 'Staking' }
+        ]
+      },
+      {
+        id: 'coin',
+        label: 'Coin:',
+        value: filterConfig.coin,
+        type: 'select',
+        options: [
+          { value: '', label: 'All Coins' },
+          ...availableCoins.map(coin => ({ value: coin, label: coin }))
+        ]
+      }
+    ]
+  };
+
+  // Prepare pagination for StandardTable
+  const pagination = {
+    currentPage,
+    totalPages,
+    itemsPerPage
+  };
+
+  // Add unique IDs to timeline items for tracking expanded rows
+  const timelineWithIds = sortedTimeline.map((item, index) => ({
+    ...item,
+    id: index
+  }));
+
+  // Custom row renderer for StandardTable
+  const renderRow = (item, index) => {
+    const rowIndex = item.id;
+    
+    return (
+      <React.Fragment key={rowIndex}>
+        <TransactionRow 
+          onClick={() => toggleRow(rowIndex)}
+          $isInternalTransfer={item.details?.transfer?.isInternalTransfer || false}
+        >
+          {columns.map(column => (
+            <td key={`${rowIndex}-${column.id}`}>
+              {column.render ? column.render(item) : item[column.id]}
+            </td>
+          ))}
+        </TransactionRow>
+        {expandedRows.has(rowIndex) && (
+          <DescriptionRow>
+            <td></td>
+            <td colSpan="5">
+              <div className="description">{item.display.description}</div>
+              {item.details?.transfer?.action === 'genesis.distribution' && (
+                <div className="airdrop-info" style={{ marginTop: '0.5rem', color: props => props.theme.colors.accent.green }}>
+                  <strong>Airdrop Cost Basis:</strong> {
+                    item.display.netWorthAmount 
+                      ? `$${item.display.netWorthAmount} ${item.display.netWorthCurrency || 'USD'}`
+                      : 'Not set'
+                  }
+                </div>
+              )}
+              <div className="raw-data">{JSON.stringify(item, null, 2)}</div>
+            </td>
+          </DescriptionRow>
+        )}
+      </React.Fragment>
+    );
   };
 
   if (isLoading) {
@@ -484,271 +593,69 @@ const Summary = () => {
               </div>
             </details>
           </div>
-          <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
-            <button 
-              onClick={() => navigate('/')}
-              style={{ 
-                padding: '0.5rem 1rem', 
-                background: '#4CAF50', 
-                border: 'none', 
-                borderRadius: '4px', 
-                color: 'white', 
-                cursor: 'pointer' 
-              }}
-            >
-              Return to Upload
-            </button>
-            {error.includes('quota') && (
-              <button 
-                onClick={() => {
-                  localStorage.clear();
-                  window.location.reload();
-                }}
-                style={{ 
-                  padding: '0.5rem 1rem', 
-                  background: '#f44336', 
-                  border: 'none', 
-                  borderRadius: '4px', 
-                  color: 'white', 
-                  cursor: 'pointer' 
-                }}
-              >
-                Clear All Data & Reload
-              </button>
-            )}
-          </div>
         </ErrorMessage>
+        
+        <WizardNavigation>
+          <WizardButton 
+            primary
+            onClick={() => navigate('/')}
+            rightIcon={<RightArrowIcon />}
+          >
+            Return to Upload
+          </WizardButton>
+          {error.includes('quota') && (
+            <WizardButton 
+              onClick={() => {
+                localStorage.clear();
+                window.location.reload();
+              }}
+              style={{ background: '#f44336', borderColor: '#f44336' }}
+            >
+              Clear All Data & Reload
+            </WizardButton>
+          )}
+        </WizardNavigation>
       </Container>
     );
   }
 
   return (
     <Container>
-      <StartOverButton onClick={handleStartOver}>
-        Start Over
-      </StartOverButton>
-      <StartOverButton 
-        onClick={processData}
-        style={{ right: '120px' }}
-      >
-        Reprocess
-      </StartOverButton>
-      <StartOverButton 
-        onClick={handleExportToKoinly}
-        style={{ right: '220px', background: '#4CAF50', borderColor: '#45a049' }}
-      >
-        Export for Koinly
-      </StartOverButton>
-      <StartOverButton 
-        onClick={handleGenerateTestCSV}
-        style={{ right: '360px', background: '#2196F3', borderColor: '#1976D2' }}
-      >
-        Generate Test CSV
-      </StartOverButton>
+      <AnimatedLogo src={hlAnimatedGif} alt="Animated HL Logo" />
+      <Title>Review Your Transactions</Title>
 
-      <TableContainer>
-        <FilterContainer>
-          <FilterSelect
-            value={filterConfig.eventType}
-            onChange={e => handleFilterChange('eventType', e.target.value)}
-          >
-            <option value="">All Event Types</option>
-            <option value="spot_trade">Spot Trades</option>
-            <option value="perp_trade">Perp Trades</option>
-            <option value="transfer">Transfers</option>
-            <option value="funding">Funding</option>
-            <option value="staking">Staking</option>
-          </FilterSelect>
-          
-          <FilterSelect
-            value={filterConfig.coin}
-            onChange={e => handleFilterChange('coin', e.target.value)}
-          >
-            <option value="">All Coins</option>
-            {availableCoins.map(coin => (
-              <option key={coin} value={coin}>{coin}</option>
-            ))}
-          </FilterSelect>
-          
-          <FilterInput
-            type="date"
-            placeholder="Start date"
-            value={filterConfig.startDate}
-            onChange={e => handleFilterChange('startDate', e.target.value)}
-          />
-          
-          <FilterInput
-            type="date"
-            placeholder="End date"
-            value={filterConfig.endDate}
-            onChange={e => handleFilterChange('endDate', e.target.value)}
-          />
-        </FilterContainer>
-        
-        <Table>
-          <thead>
-            <tr>
-              <SortableHeader 
-                onClick={() => handleSort('time')}
-                $active={sortConfig.key === 'time'}
-              >
-                Date
-                <span className="sort-indicator">
-                  {sortConfig.key === 'time' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-                </span>
-              </SortableHeader>
-              <SortableHeader 
-                onClick={() => handleSort('label')}
-                $active={sortConfig.key === 'label'}
-              >
-                Label
-                <span className="sort-indicator">
-                  {sortConfig.key === 'label' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-                </span>
-              </SortableHeader>
-              <SortableHeader 
-                onClick={() => handleSort('sent')}
-                $active={sortConfig.key === 'sent'}
-              >
-                Sent
-                <span className="sort-indicator">
-                  {sortConfig.key === 'sent' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-                </span>
-              </SortableHeader>
-              <SortableHeader 
-                onClick={() => handleSort('received')}
-                $active={sortConfig.key === 'received'}
-              >
-                Received
-                <span className="sort-indicator">
-                  {sortConfig.key === 'received' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-                </span>
-              </SortableHeader>
-              <SortableHeader 
-                onClick={() => handleSort('fee')}
-                $active={sortConfig.key === 'fee'}
-              >
-                Fee
-                <span className="sort-indicator">
-                  {sortConfig.key === 'fee' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-                </span>
-              </SortableHeader>
-              {/* Commenting out Gain column for now
-              <SortableHeader 
-                onClick={() => handleSort('gain')}
-                $active={sortConfig.key === 'gain'}
-              >
-                Gain
-                <span className="sort-indicator">
-                  {sortConfig.key === 'gain' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-                </span>
-              </SortableHeader>
-              */}
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedTimeline
-              .slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
-              .map((event, index) => {
-                const date = new Date(event.time);
-                const formattedDate = date.getDate() + ' ' + 
-                  date.toLocaleString('en-US', { month: 'short' }) + ' ' + 
-                  date.getFullYear().toString().substr(-2);
-                const formattedTime = date.getHours().toString().padStart(2, '0') + ':' + 
-                  date.getMinutes().toString().padStart(2, '0') + ':' + 
-                  date.getSeconds().toString().padStart(2, '0');
-                
-                const rowIndex = (currentPage - 1) * itemsPerPage + index;
-                
-                return (
-                  <React.Fragment key={rowIndex}>
-                    <TransactionRow 
-                      onClick={() => toggleRow(rowIndex)}
-                      $isInternalTransfer={event.details?.transfer?.isInternalTransfer || false}
-                    >
-                      <DateCell>
-                        <div className="date">{formattedDate}</div>
-                        <div className="time">{formattedTime}</div>
-                      </DateCell>
-                      <td>
-                        <LabelTag>
-                          <span className="eventLabel">{event.display.eventLabel}</span>
-                          {event.koinly.tag && (
-                            <span className="tag">{event.koinly.tag}</span>
-                          )}
-                        </LabelTag>
-                      </td>
-                      <td>
-                        {event.display.sentAmount && (
-                          `${formatNumber(event.display.sentAmount)} ${event.display.sentCurrency}`
-                        )}
-                      </td>
-                      <td>
-                        {event.display.receivedAmount && (
-                          `${formatNumber(event.display.receivedAmount)} ${event.display.receivedCurrency}`
-                        )}
-                      </td>
-                      <td>
-                        {event.display.feeAmount && (
-                          `${formatNumber(event.display.feeAmount)} ${event.display.feeCurrency}`
-                        )}
-                      </td>
-                      {/* Commenting out Gain column for now
-                      <td style={{ color: parseFloat(event.display.pnl || 0) >= 0 ? '#4CAF50' : '#FF5252' }}>
-                        {event.display.pnl ? `$${formatNumber(event.display.pnl)}` : '-'}
-                      </td>
-                      */}
-                      <td>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ transform: expandedRows.has(rowIndex) ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                          <path d="M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
-                        </svg>
-                      </td>
-                    </TransactionRow>
-                    {expandedRows.has(rowIndex) && (
-                      <DescriptionRow>
-                        <td></td>
-                        <td colSpan="6">
-                          <div className="description">{event.display.description}</div>
-                          {event.details?.transfer?.action === 'genesis.distribution' && (
-                            <div className="airdrop-info" style={{ marginTop: '0.5rem', color: props => props.theme.colors.accent.green }}>
-                              <strong>Airdrop Cost Basis:</strong> {
-                                event.display.netWorthAmount 
-                                  ? `$${event.display.netWorthAmount} ${event.display.netWorthCurrency || 'USD'}`
-                                  : 'Not set'
-                              }
-                            </div>
-                          )}
-                          <div className="raw-data">{JSON.stringify(event, null, 2)}</div>
-                        </td>
-                      </DescriptionRow>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-          </tbody>
-        </Table>
-        
-        {totalPages > 1 && (
-          <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-            <button 
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            >
-              Previous
-            </button>
-            <span style={{ margin: '0 1rem' }}>
-              Page {currentPage} of {totalPages}
-            </span>
-            <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next
-            </button>
-          </div>
-        )}
-      </TableContainer>
+      <StandardTable
+        columns={columns}
+        data={timelineWithIds.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        sortConfig={sortConfig}
+        onSort={handleSort}
+        pagination={pagination}
+        onPageChange={setCurrentPage}
+        renderRow={renderRow}
+        columnWidths={{
+          col1: '15%',  // Date column
+          col2: '30%',  // Label column - 30% as requested
+          col3: '15%',  // Sent column
+          col4: '15%',  // Received column
+          col5: '15%',  // Fee column
+          col6: '10%'    // Actions column (dropdown caret) - 5% as requested
+        }}
+      />
+
+      <WizardNavigation>
+        <WizardButton onClick={handleStartOver}>
+          Start Over
+        </WizardButton>
+        <WizardButton 
+          onClick={handleExportToKoinly}
+          primary
+          rightIcon={<RightArrowIcon />}
+        >
+          Export to Koinly
+        </WizardButton>
+      </WizardNavigation>
     </Container>
   );
 };

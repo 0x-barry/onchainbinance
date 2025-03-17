@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { FileUploader } from '../../services/FileUploader';
+import hlAnimatedGif from '../../images/hl-animated.gif';
+import StandardTable from '../UI/StandardTable';
+import WizardNavigation, { WizardButton, LeftArrowIcon, RightArrowIcon } from '../UI/WizardNavigation';
 
 const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 1rem;
+  padding-bottom: 5rem; /* Add padding to account for the fixed navigation */
   width: 100%;
   max-width: 1000px;
   margin: 0 auto;
@@ -16,40 +20,78 @@ const Container = styled.div`
   
   @media (min-width: 768px) {
     padding: 2rem;
+    padding-bottom: 5rem; /* Add padding to account for the fixed navigation */
   }
 `;
 
-const Header = styled.div`
+const AnimatedLogo = styled.img`
+  width: 25px;
+  height: auto;
+  margin-bottom: 0.5rem;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+`;
+
+const Eyebrow = styled.h3`
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-family: ${props => props.theme.fonts.header};
   width: 100%;
-  margin-bottom: 2rem;
+
+  @media (min-width: 768px) {
+    font-size: 1.25rem;
+  }
 `;
 
 const Title = styled.h1`
-  color: ${props => props.theme.colors.text.primary};
-  margin-bottom: 0.5rem;
-  font-family: ${props => props.theme.fonts.header};
-`;
+  font-size: 2.25rem;
+  margin-bottom: 3rem;
+  text-align: center;
 
-const Description = styled.p`
-  color: ${props => props.theme.colors.text.secondary};
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
+  @media (min-width: 768px) {
+    font-size: 3rem;
+  }
 `;
 
 const InfoBox = styled.div`
   background: ${props => props.theme.colors.secondary};
   border-radius: ${props => props.theme.borderRadius.medium};
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
   margin-bottom: 2rem;
   width: 100%;
-  font-size: 0.9rem; /* Smaller font size for the entire info box */
 `;
 
 const InfoTitle = styled.h3`
   color: ${props => props.theme.colors.text.primary};
-  margin-bottom: 0.75rem;
+  margin-top: 0;
+  margin-bottom: 0;
   font-family: ${props => props.theme.fonts.header};
   font-size: 1.1rem; /* Smaller title */
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  
+  &:hover {
+    opacity: 0.9;
+  }
+  
+  &:after {
+    content: '${props => props.$isExpanded ? '▲' : '▼'}';
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+  }
+`;
+
+const InfoContent = styled.div`
+  max-height: ${props => props.$isExpanded ? '1000px' : '0'};
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+  opacity: ${props => props.$isExpanded ? '1' : '0'};
+  font-size: 0.85rem;
+  transition: opacity 0.3s ease-in-out, max-height 0.3s ease-in-out;
 `;
 
 const InfoText = styled.p`
@@ -59,40 +101,16 @@ const InfoText = styled.p`
   font-size: 0.85rem; /* Smaller text */
 `;
 
-const Table = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 2rem;
-  
-  th, td {
-    padding: 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid ${props => props.theme.colors.secondary};
-  }
-
-  th {
-    font-weight: ${props => props.theme.fontWeights.bold};
-    color: ${props => props.theme.colors.text.secondary};
-  }
+const InputContainer = styled.div`
+  display: flex;
+  flex-direction: column;
 `;
 
-const SortableHeader = styled.th`
-  cursor: pointer;
-  user-select: none;
-  position: relative;
-  padding-right: 1.5rem !important;
-
-  &:hover {
-    background-color: ${props => props.theme.colors.secondary};
-  }
-
-  .sort-indicator {
-    position: absolute;
-    right: 0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: ${props => props.$active ? 1 : 0.3};
-  }
+const TotalCostBasis = styled.div`
+  color: ${props => props.theme.colors.text.secondary};
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  opacity: 0.8;
 `;
 
 const Input = styled.input`
@@ -119,11 +137,17 @@ const ButtonContainer = styled.div`
   display: flex;
   justify-content: space-between;
   width: 100%;
+  position: sticky;
+  bottom: 0;
+  background: ${props => props.theme.colors.background};
+  padding: 1rem 0;
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.1);
+  z-index: 90;
   margin-top: 2rem;
 `;
 
 const Button = styled.button`
-  background: ${props => props.primary ? props.theme.colors.primary : props.theme.colors.secondary};
+  background: ${props => props.$primary ? props.theme.colors.primary : props.theme.colors.secondary};
   color: ${props => props.theme.colors.background};
   border: none;
   border-radius: ${props => props.theme.borderRadius.small};
@@ -159,6 +183,39 @@ const BulkActionLabel = styled.span`
   font-size: 0.9rem;
 `;
 
+const DateCell = styled.div`
+  .date {
+    font-weight: ${props => props.theme.fontWeights.bold};
+    font-size: 0.9rem;
+  }
+  .time {
+    color: ${props => props.theme.colors.text.secondary};
+    font-size: 0.8rem;
+  }
+`;
+
+// Define a custom header component for the StandardTable
+const CustomTableHeader = ({ bulkMethod, setBulkMethod, applyBulkMethod }) => (
+  <BulkActionContainer>
+    <BulkActionLabel>Apply to all:</BulkActionLabel>
+    <Select 
+      value={bulkMethod}
+      onChange={(e) => setBulkMethod(e.target.value)}
+      style={{ maxWidth: '120px' }}
+    >
+      <option value="zero">Zero Cost</option>
+      <option value="firstTraded" disabled>First Traded Price</option>
+      <option value="custom">Custom Value</option>
+    </Select>
+    <Button 
+      onClick={applyBulkMethod}
+      style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem' }}
+    >
+      Apply
+    </Button>
+  </BulkActionContainer>
+);
+
 const AirdropConfig = () => {
   const navigate = useNavigate();
   const [airdrops, setAirdrops] = useState([]);
@@ -170,6 +227,7 @@ const AirdropConfig = () => {
     direction: 'desc'
   });
   const [bulkMethod, setBulkMethod] = useState('zero');
+  const [infoBoxExpanded, setInfoBoxExpanded] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -268,6 +326,9 @@ const AirdropConfig = () => {
         if (bulkMethod === 'firstTraded') {
           // This would be implemented in the future
           value = '0.00'; // Placeholder
+        } else if (bulkMethod === 'custom') {
+          // Keep existing custom value if already set, otherwise default to 0
+          value = airdrop.costBasisMethod === 'custom' ? airdrop.costBasisValue : '0.00';
         }
         
         return {
@@ -277,6 +338,13 @@ const AirdropConfig = () => {
         };
       })
     );
+  };
+
+  // Calculate total cost basis for an airdrop
+  const calculateTotalCostBasis = (perTokenValue, tokenAmount) => {
+    const perToken = parseFloat(perTokenValue) || 0;
+    const total = perToken * tokenAmount;
+    return total.toFixed(2);
   };
 
   const saveAirdropConfig = () => {
@@ -294,13 +362,18 @@ const AirdropConfig = () => {
           const matchingAirdrop = airdrops.find(airdrop => airdrop.id === timestamp);
           
           if (matchingAirdrop) {
-            // Format the value to always have two decimal places
-            const formattedValue = parseFloat(matchingAirdrop.costBasisValue).toFixed(2);
+            // Extract the amount from the accountValueChange
+            const [amountStr] = entry.accountValueChange.split(' ');
+            const amount = parseFloat(amountStr);
             
-            // Update the entry with the cost basis value
+            // Calculate the total cost basis (per token value * number of tokens)
+            const perTokenValue = parseFloat(matchingAirdrop.costBasisValue) || 0;
+            const totalCostBasis = (perTokenValue * amount).toFixed(2);
+            
+            // Update the entry with the total cost basis value
             return {
               ...entry,
-              netWorthAmount: formattedValue,
+              netWorthAmount: totalCostBasis,
               netWorthCurrency: 'USD'
             };
           }
@@ -342,6 +415,98 @@ const AirdropConfig = () => {
     }
   });
 
+  // Format number function to match Summary.js
+  const formatNumber = (value) => {
+    if (!value || value === '-') return '-';
+    if (typeof value === 'string') {
+      const num = parseFloat(value);
+      return isNaN(num) ? value : num.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+    }
+    return value.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  };
+
+  // Define columns for the StandardTable
+  const columns = [
+    { 
+      id: 'time', 
+      label: 'Date', 
+      sortable: true,
+      render: (airdrop) => {
+        const date = new Date(airdrop.time);
+        const formattedDate = date.getDate() + ' ' + 
+          date.toLocaleString('en-US', { month: 'short' }) + ' ' + 
+          date.getFullYear().toString().substr(-2);
+        const formattedTime = date.getHours().toString().padStart(2, '0') + ':' + 
+          date.getMinutes().toString().padStart(2, '0') + ':' + 
+          date.getSeconds().toString().padStart(2, '0');
+        
+        return (
+          <DateCell>
+            <div className="date">{formattedDate}</div>
+            <div className="time">{formattedTime}</div>
+          </DateCell>
+        );
+      }
+    },
+    { 
+      id: 'asset', 
+      label: 'Asset', 
+      sortable: true 
+    },
+    { 
+      id: 'amount', 
+      label: 'Amount', 
+      sortable: true,
+      render: (airdrop) => formatNumber(airdrop.amount)
+    },
+    { 
+      id: 'method', 
+      label: 'Method', 
+      sortable: false,
+      render: (airdrop) => (
+        <Select 
+          value={airdrop.costBasisMethod}
+          onChange={(e) => handleMethodChange(airdrop.id, e.target.value)}
+        >
+          <option value="zero">Zero Cost</option>
+          <option value="firstTraded" disabled>First Traded Price (Coming Soon)</option>
+          <option value="custom">Custom Value</option>
+        </Select>
+      )
+    },
+    { 
+      id: 'costBasis', 
+      label: 'Cost Basis (USD)', 
+      sortable: false,
+      render: (airdrop) => (
+        <InputContainer>
+          <Input 
+            type="number"
+            min="0"
+            step="0.01"
+            value={airdrop.costBasisValue}
+            onChange={(e) => handleValueChange(airdrop.id, e.target.value)}
+            disabled={airdrop.costBasisMethod === 'zero' || airdrop.costBasisMethod === 'firstTraded'}
+            onBlur={(e) => {
+              // Format to two decimal places when the user leaves the field
+              const formattedValue = parseFloat(e.target.value || 0).toFixed(2);
+              e.target.value = formattedValue;
+              handleValueChange(airdrop.id, formattedValue);
+            }}
+          />
+          <TotalCostBasis>
+            Total: ${airdrop.costBasisMethod === 'zero' ? '0.00' : calculateTotalCostBasis(airdrop.costBasisValue, airdrop.amount)}
+          </TotalCostBasis>
+        </InputContainer>
+      )
+    }
+  ];
+
+  // Prepare filters for StandardTable - in this case, we don't need filters
+  const filters = {
+    mainFilters: []
+  };
+
   if (loading) {
     return (
       <Container>
@@ -353,8 +518,19 @@ const AirdropConfig = () => {
   if (error) {
     return (
       <Container>
+        <AnimatedLogo src={hlAnimatedGif} alt="Animated Logo" />
+        <Title>Error</Title>
         <div>{error}</div>
-        <Button onClick={() => navigate('/upload')}>Return to Upload</Button>
+        
+        <WizardNavigation>
+          <WizardButton 
+            primary
+            onClick={() => navigate('/upload')}
+            rightIcon={<RightArrowIcon />}
+          >
+            Return to Upload
+          </WizardButton>
+        </WizardNavigation>
       </Container>
     );
   }
@@ -362,145 +538,103 @@ const AirdropConfig = () => {
   if (airdrops.length === 0) {
     return (
       <Container>
-        <Header>
-          <Title>No Airdrops Detected</Title>
-        </Header>
+        <AnimatedLogo src={hlAnimatedGif} alt="Animated Logo" />
+        <Title>No Airdrops Detected</Title>
         
         <NoAirdropsMessage>
           <p>We didn't find any airdrops in your transaction history.</p>
-          <Button primary onClick={() => navigate('/summary')}>
-            Continue to Summary
-          </Button>
         </NoAirdropsMessage>
+        
+        <WizardNavigation>
+          <WizardButton 
+            onClick={() => navigate('/upload')}
+            leftIcon={<LeftArrowIcon />}
+          >
+            Back to Upload
+          </WizardButton>
+          <WizardButton 
+            primary 
+            onClick={() => navigate('/summary')}
+            rightIcon={<RightArrowIcon />}
+          >
+            Continue to Summary
+          </WizardButton>
+        </WizardNavigation>
       </Container>
     );
   }
 
   return (
     <Container>
-      <Header>
-        <Title>Configure Airdrop Value</Title>
-      </Header>
+      <AnimatedLogo src={hlAnimatedGif} alt="Animated Logo" />
+      <Title>Set Airdrop Value</Title>
       
       <InfoBox>
-        <InfoTitle>About Airdrop Taxation</InfoTitle>
-        <InfoText>
-          In most jurisdictions, airdrops are considered taxable income at the time of receipt. 
-          You need to determine the fair market value (cost basis) of the tokens when you received them.
-        </InfoText>
-        <InfoText>
-          You can choose from several methods:
-          <ul>
-            <li><strong>Zero Cost Basis:</strong> Set the value to $0 (may require amending later)</li>
-            <li><span style={{ opacity: 0.7 }}><strong>First Traded Price:</strong> Use the first traded price after receipt (Coming Soon)</span></li>
-            <li><strong>Custom Value:</strong> Enter a specific value based on your research</li>
-          </ul>
-        </InfoText>
-        <InfoText>
-          <strong>Note:</strong> This is not tax advice. Please consult with a tax professional for guidance specific to your situation.
-        </InfoText>
+        <InfoTitle 
+          onClick={() => setInfoBoxExpanded(!infoBoxExpanded)} 
+          $isExpanded={infoBoxExpanded}
+        >
+          About Airdrop Taxation
+        </InfoTitle>
+        <InfoContent $isExpanded={infoBoxExpanded}>
+          <InfoText>
+            In most jurisdictions, airdrops are considered taxable income at the time of receipt. 
+            You need to determine the fair market value (cost basis) of the tokens when you received them.
+          </InfoText>
+          <InfoText>
+            You can choose from several methods:
+            <ul>
+              <li><strong>Zero Cost Basis:</strong> Set the value to $0 (may require amending later)</li>
+              <li><span style={{ opacity: 0.7 }}><strong>First Traded Price:</strong> Use the first traded price after receipt (Coming Soon)</span></li>
+              <li><strong>Custom Value:</strong> Enter a specific value based on your research</li>
+            </ul>
+          </InfoText>
+          <InfoText>
+            <strong>Note:</strong> Enter the cost basis <em>per token</em>. The total value (per token × quantity) will be calculated automatically and used for tax reporting.
+          </InfoText>
+          <InfoText>
+            <strong>Disclaimer:</strong> This is not tax advice. Please consult with a tax professional for guidance specific to your situation.
+          </InfoText>
+        </InfoContent>
       </InfoBox>
       
-      <BulkActionContainer>
-        <BulkActionLabel>Apply to all:</BulkActionLabel>
-        <Select 
-          value={bulkMethod}
-          onChange={(e) => setBulkMethod(e.target.value)}
-          style={{ maxWidth: '120px' }}
-        >
-          <option value="zero">Zero Cost</option>
-          <option value="firstTraded" disabled>First Traded Price</option>
-          <option value="custom">Custom Value</option>
-        </Select>
-        <Button 
-          onClick={applyBulkMethod}
-          style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem' }}
-        >
-          Apply
-        </Button>
-      </BulkActionContainer>
+      <StandardTable
+        columns={columns}
+        data={sortedAirdrops}
+        filters={filters}
+        sortConfig={sortConfig}
+        onSort={handleSort}
+        headerContent={
+          <CustomTableHeader 
+            bulkMethod={bulkMethod} 
+            setBulkMethod={setBulkMethod} 
+            applyBulkMethod={applyBulkMethod} 
+          />
+        }
+        columnWidths={{
+          col1: '15%',  // Date column
+          col2: '15%',  // Asset column
+          col3: '15%',  // Amount column
+          col4: '20%',  // Method column
+          col5: '35%'   // Cost Basis column (wider for the input and total display)
+        }}
+      />
       
-      <Table>
-        <thead>
-          <tr>
-            <SortableHeader 
-              onClick={() => handleSort('time')}
-              $active={sortConfig.key === 'time'}
-            >
-              Date
-              <span className="sort-indicator">
-                {sortConfig.key === 'time' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-              </span>
-            </SortableHeader>
-            <SortableHeader 
-              onClick={() => handleSort('asset')}
-              $active={sortConfig.key === 'asset'}
-            >
-              Asset
-              <span className="sort-indicator">
-                {sortConfig.key === 'asset' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-              </span>
-            </SortableHeader>
-            <SortableHeader 
-              onClick={() => handleSort('amount')}
-              $active={sortConfig.key === 'amount'}
-            >
-              Amount
-              <span className="sort-indicator">
-                {sortConfig.key === 'amount' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
-              </span>
-            </SortableHeader>
-            <th>Method</th>
-            <th>Cost Basis (USD)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedAirdrops.map(airdrop => {
-            const date = new Date(airdrop.time);
-            const formattedDate = date.toLocaleDateString();
-            
-            return (
-              <tr key={airdrop.id}>
-                <td>{formattedDate}</td>
-                <td>{airdrop.asset}</td>
-                <td>{airdrop.amount.toFixed(4)}</td>
-                <td>
-                  <Select 
-                    value={airdrop.costBasisMethod}
-                    onChange={(e) => handleMethodChange(airdrop.id, e.target.value)}
-                  >
-                    <option value="zero">Zero Cost</option>
-                    <option value="firstTraded" disabled>First Traded Price (Coming Soon)</option>
-                    <option value="custom">Custom Value</option>
-                  </Select>
-                </td>
-                <td>
-                  <Input 
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={airdrop.costBasisValue}
-                    onChange={(e) => handleValueChange(airdrop.id, e.target.value)}
-                    disabled={airdrop.costBasisMethod === 'zero' || airdrop.costBasisMethod === 'firstTraded'}
-                    onBlur={(e) => {
-                      // Format to two decimal places when the user leaves the field
-                      const formattedValue = parseFloat(e.target.value || 0).toFixed(2);
-                      e.target.value = formattedValue;
-                      handleValueChange(airdrop.id, formattedValue);
-                    }}
-                  />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </Table>
-      
-      <ButtonContainer>
-        <Button primary onClick={saveAirdropConfig}>
-          Save Configuration
-        </Button>
-      </ButtonContainer>
+      <WizardNavigation>
+        <WizardButton 
+          onClick={() => navigate('/upload')}
+          leftIcon={<LeftArrowIcon />}
+        >
+          Back to Upload
+        </WizardButton>
+        <WizardButton 
+          primary 
+          onClick={saveAirdropConfig}
+          rightIcon={<RightArrowIcon />}
+        >
+          Save and Continue
+        </WizardButton>
+      </WizardNavigation>
     </Container>
   );
 };

@@ -2,21 +2,45 @@ import React, { useState, useRef } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { FileUploader } from '../../services/FileUploader';
+import hlAnimatedGif from '../../images/hl-animated.gif';
+import WizardNavigation, { WizardButton, RightArrowIcon } from '../UI/WizardNavigation';
 
 const Container = styled.div`
   padding: 2rem;
+  padding-bottom: 5rem;
   max-width: 1000px;
   margin: 0 auto;
 `;
 
-const Header = styled.div`
-  margin-bottom: 2rem;
+const AnimatedLogo = styled.img`
+  width: 25px;
+  height: auto;
+  margin-bottom: 0.5rem;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+`;
+
+const Eyebrow = styled.h3`
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-family: ${props => props.theme.fonts.header};
+  width: 100%;
+
+  @media (min-width: 768px) {
+    font-size: 1.25rem;
+  }
 `;
 
 const Title = styled.h1`
-  color: ${props => props.theme.colors.text.primary};
-  margin-bottom: 0.5rem;
-  font-family: ${props => props.theme.fonts.header};
+  font-size: 2.25rem;
+  margin-bottom: 3rem;
+  text-align: center;
+
+  @media (min-width: 768px) {
+    font-size: 3rem;
+  }
 `;
 
 const UploadCard = styled.div`
@@ -165,6 +189,17 @@ const FileTypeStatus = styled.div`
   font-family: ${props => props.theme.fonts.body};
 `;
 
+const InstructionLink = styled.a`
+  color: ${props => props.theme.colors.text.secondary};
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  
+  &:hover {
+    color: ${props => props.theme.colors.primary};
+  }
+`;
+
 const FileProgress = styled.div`
   width: 100%;
   height: 3px;
@@ -178,37 +213,6 @@ const ProgressBar = styled.div`
   height: 100%;
   background: ${props => props.theme.colors.accent.green};
   width: ${props => props.$progress}%;
-`;
-
-const ProcessButton = styled.button`
-  background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
-  border: none;
-  border-radius: ${props => props.theme.borderRadius.small};
-  color: ${props => props.theme.colors.background};
-  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
-  font-size: 1rem;
-  font-weight: ${props => props.theme.fontWeights.bold};
-  padding: 0.75rem 1.5rem;
-  width: 100%;
-  transition: background-color 0.3s;
-  margin-top: 1.5rem;
-  font-family: ${props => props.theme.fonts.body};
-
-  &:hover {
-    background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
-    opacity: ${props => props.disabled ? 1 : 0.9};
-  }
-`;
-
-const ErrorMessage = styled.div`
-  background: ${props => props.theme.colors.error};
-  opacity: 0.1;
-  border: 1px solid ${props => props.theme.colors.error};
-  border-radius: ${props => props.theme.borderRadius.small};
-  color: ${props => props.theme.colors.error};
-  margin-bottom: 1rem;
-  padding: 1rem;
-  font-family: ${props => props.theme.fonts.body};
 `;
 
 const LoadingOverlay = styled.div`
@@ -262,6 +266,36 @@ const LoadingSubText = styled.p`
   font-family: ${props => props.theme.fonts.body};
 `;
 
+const ProcessButton = styled.button`
+  background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
+  border: none;
+  border-radius: ${props => props.theme.borderRadius.small};
+  color: ${props => props.theme.colors.background};
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  font-size: 1rem;
+  font-weight: ${props => props.theme.fontWeights.bold};
+  padding: 0.75rem 1.5rem;
+  width: 100%;
+  transition: background-color 0.3s;
+  font-family: ${props => props.theme.fonts.body};
+
+  &:hover {
+    background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
+    opacity: ${props => props.disabled ? 1 : 0.9};
+  }
+`;
+
+const ErrorMessage = styled.div`
+  background: ${props => props.theme.colors.error};
+  opacity: 0.1;
+  border: 1px solid ${props => props.theme.colors.error};
+  border-radius: ${props => props.theme.borderRadius.small};
+  color: ${props => props.theme.colors.error};
+  margin-bottom: 1rem;
+  padding: 1rem;
+  font-family: ${props => props.theme.fonts.body};
+`;
+
 const Upload = () => {
   const navigate = useNavigate();
   const [files, setFiles] = useState({});
@@ -277,7 +311,8 @@ const Upload = () => {
       id: 'trade_history',
       name: 'Trade History',
       required: true,
-      instructions: 'Account > Trade History > Export CSV',
+      instructions: 'Portfolio > Trade History > Export CSV',
+      link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'trade_history',
       color: '#4285F4', // Google blue
       icon: 'document'
@@ -286,7 +321,8 @@ const Upload = () => {
       id: 'funding_history',
       name: 'Funding History',
       required: true,
-      instructions: 'Account > Funding History > Export CSV',
+      instructions: 'Portfolio > Funding History > Export CSV',
+      link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'funding_history',
       color: '#EA4335', // Google red
       icon: 'document'
@@ -295,7 +331,8 @@ const Upload = () => {
       id: 'deposits_and_withdrawals',
       name: 'Deposits & Withdrawals',
       required: true,
-      instructions: 'Account > Deposits & Withdrawals > Export CSV',
+      instructions: 'Portfolio > Deposits & Withdrawals > Export CSV',
+      link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'deposits_and_withdrawals',
       color: '#FBBC05', // Google yellow
       icon: 'document'
@@ -304,7 +341,8 @@ const Upload = () => {
       id: 'staking_rewards',
       name: 'Staking Rewards',
       required: false,
-      instructions: 'Staking > Rewards > Export CSV',
+      instructions: 'Staking > Staking Reward History > Export CSV',
+      link: 'https://app.hyperliquid.xyz/staking',
       filePrefix: 'rewardHistory',
       color: '#34A853', // Google green
       icon: 'document'
@@ -313,7 +351,8 @@ const Upload = () => {
       id: 'staking_actions',
       name: 'Staking Actions',
       required: false,
-      instructions: 'Staking > Actions > Export CSV',
+      instructions: 'Staking > Staking Action History > Export CSV',
+      link: 'https://app.hyperliquid.xyz/staking',
       filePrefix: 'actionHistory',
       color: '#9C27B0', // Purple
       icon: 'document'
@@ -508,9 +547,8 @@ const Upload = () => {
 
   return (
     <Container>
-      <Header>
-        <Title>File Upload</Title>
-      </Header>
+      <AnimatedLogo src={hlAnimatedGif} alt="Animated Logo" />
+      <Title>Upload Your CSV Files</Title>
       
       <UploadCard>
         
@@ -574,7 +612,17 @@ const Upload = () => {
                       <FileTypeStatus $isUploaded={isUploaded}>
                         {isUploaded 
                           ? `${uploadedFile} (${files[uploadedFile].length} rows)` 
-                          : fileType.instructions}
+                          : (
+                            <>
+                              <InstructionLink 
+                                href={fileType.link} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                              >
+                                {fileType.instructions}
+                              </InstructionLink>
+                            </>
+                          )}
                       </FileTypeStatus>
                       {isUploaded && (
                         <FileProgress>
@@ -589,12 +637,16 @@ const Upload = () => {
           </FileStatusContainer>
         </UploadContent>
         
-        <ProcessButton 
-          onClick={storeAndContinue} 
-          disabled={!hasRequiredFiles() || processing}
-        >
-          Process Files
-        </ProcessButton>
+        <WizardNavigation justifyContent="flex-end">
+          <WizardButton 
+            primary
+            onClick={storeAndContinue} 
+            disabled={!hasRequiredFiles() || processing}
+            rightIcon={<RightArrowIcon />}
+          >
+            Process Files
+          </WizardButton>
+        </WizardNavigation>
       </UploadCard>
       
       {processing && (

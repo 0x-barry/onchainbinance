@@ -9,6 +9,8 @@ import GlobalStyle from './GlobalStyle';
 import DriftErrorPage from './components/DriftErrorPage';
 import Upload from './components/Tax/Upload';
 import AirdropConfig from './components/Tax/AirdropConfig';
+import KoinlyGuide from './components/Tax/KoinlyGuide';
+import { useState } from 'react';
 
 const Nav = styled.nav`
   padding: 1rem;
@@ -52,6 +54,20 @@ const StyledNavLink = styled(NavLink)`
 `;
 
 function App() {
+  const [timeline, setTimeline] = useState([]);
+  
+  // Function to handle data processing and set the timeline
+  const handleDataProcessed = (processedData) => {
+    if (processedData && processedData.timeline) {
+      setTimeline(processedData.timeline);
+    }
+  };
+  
+  // Function to handle timeline updates (e.g., from AirdropConfig)
+  const handleTimelineUpdate = (updatedTimeline) => {
+    setTimeline(updatedTimeline);
+  };
+  
   return (
     <ThemeProvider>
       <GlobalStyle />
@@ -72,9 +88,10 @@ function App() {
 
           <Routes>
             <Route path="/" element={<Navigate to="/upload" replace />} />
-            <Route path="/upload" element={<Upload />} />
-            <Route path="/airdrop-config" element={<AirdropConfig />} />
-            <Route path="/summary" element={<Summary />} />
+            <Route path="/upload" element={<Upload onDataProcessed={handleDataProcessed} />} />
+            <Route path="/airdrop-config" element={<AirdropConfig timeline={timeline} onUpdate={handleTimelineUpdate} />} />
+            <Route path="/koinly-guide" element={<KoinlyGuide timeline={timeline} />} />
+            <Route path="/summary" element={<Summary timeline={timeline} />} />
             <Route path="/ratio" element={<RatioMeter />} />
             <Route path="/calculator" element={<Navigate to="/calculator/solana" replace />} />
             <Route path="/calculator/:coin" element={<MarketCapComparison />} />

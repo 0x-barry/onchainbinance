@@ -58,8 +58,6 @@ export class FileUploader {
         return;
       }
 
-      console.log(`Starting to parse file: ${file.name}`);
-
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
@@ -96,17 +94,14 @@ export class FileUploader {
           if (fileType) {
             try {
               this.validateCSVFormat(results.data, fileType);
-              console.log(`${file.name} validated as ${fileType} format`);
             } catch (validationError) {
               console.error(`Validation error for ${file.name}:`, validationError.message);
-              console.log(`First 3 rows of ${file.name}:`, results.data.slice(0, 3));
               console.warn(`Continuing with processing despite validation errors in ${file.name}`);
             }
           } else {
             console.warn(`Unknown file type for ${file.name}, skipping validation`);
           }
           
-          console.log(`First 3 rows of ${file.name}:`, results.data.slice(0, 3));
           resolve(results.data);
         },
         error: (error) => {
@@ -141,6 +136,15 @@ export class FileUploader {
         throw new Error('No timeline data provided');
       }
 
+      // Import asset support helpers
+      const { formatCurrencyForKoinly, getAssetWarningType } = require('./KoinlyAssetSupport');
+      
+      // Track problematic assets for reporting
+      const problematicAssets = {
+        soft: new Set(),
+        hard: new Set()
+      };
+
       // Define CSV headers
       const headers = [
         'Date',
@@ -159,18 +163,62 @@ export class FileUploader {
 
       // Convert timeline data to CSV rows
       const rows = timeline.map(event => {
+        // Get original currencies
+        const sentCurrencyDisplay = event.display.sentCurrency;
+        const receivedCurrencyDisplay = event.display.receivedCurrency;
+        const feeCurrencyDisplay = event.display.feeCurrency;
+        
+        // Format currencies for Koinly
+        const sentCurrencyKoinly = formatCurrencyForKoinly(sentCurrencyDisplay);
+        const receivedCurrencyKoinly = formatCurrencyForKoinly(receivedCurrencyDisplay);
+        const feeCurrencyKoinly = formatCurrencyForKoinly(feeCurrencyDisplay);
+        
+        // Check support status and track problematic assets
+        if (sentCurrencyDisplay) {
+          const warningType = getAssetWarningType(sentCurrencyDisplay);
+          if (warningType === 'soft') problematicAssets.soft.add(sentCurrencyDisplay);
+          if (warningType === 'hard') problematicAssets.hard.add(sentCurrencyDisplay);
+        }
+        
+        if (receivedCurrencyDisplay) {
+          const warningType = getAssetWarningType(receivedCurrencyDisplay);
+          if (warningType === 'soft') problematicAssets.soft.add(receivedCurrencyDisplay);
+          if (warningType === 'hard') problematicAssets.hard.add(receivedCurrencyDisplay);
+        }
+        
+        if (feeCurrencyDisplay) {
+          const warningType = getAssetWarningType(feeCurrencyDisplay);
+          if (warningType === 'soft') problematicAssets.soft.add(feeCurrencyDisplay);
+          if (warningType === 'hard') problematicAssets.hard.add(feeCurrencyDisplay);
+        }
+        
+        // Enhance description with warning for problematic assets
+        let description = event.koinly.description;
+        const hasHardWarningAsset = [sentCurrencyDisplay, receivedCurrencyDisplay, feeCurrencyDisplay].some(
+          currency => currency && getAssetWarningType(currency) === 'hard'
+        );
+        const hasSoftWarningAsset = [sentCurrencyDisplay, receivedCurrencyDisplay, feeCurrencyDisplay].some(
+          currency => currency && getAssetWarningType(currency) === 'soft'
+        );
+        
+        if (hasHardWarningAsset) {
+          description += " [WARNING: Contains unsupported assets]";
+        } else if (hasSoftWarningAsset) {
+          description += " [REVIEW: Contains assets with limited Koinly support]";
+        }
+        
         return [
           event.time,
           event.koinly.sentAmount,
-          event.display.sentCurrency,
+          sentCurrencyKoinly,
           event.koinly.receivedAmount,
-          event.display.receivedCurrency,
+          receivedCurrencyKoinly,
           event.koinly.feeAmount,
-          event.koinly.feeCurrency,
+          feeCurrencyKoinly,
           event.koinly.netWorthAmount || '',
           event.koinly.netWorthCurrency || '',
           event.koinly.tag,
-          event.koinly.description,
+          description,
           '' // TxHash
         ].map(cell => {
           // Escape cells containing commas or quotes
@@ -204,7 +252,16 @@ export class FileUploader {
       link.click();
       document.body.removeChild(link);
       
-      console.log('Koinly CSV file download initiated');
+      // Store problematic assets in localStorage for the follow-up guide
+      localStorage.setItem('koinlySoftWarningAssets', 
+        JSON.stringify(Array.from(problematicAssets.soft)));
+      localStorage.setItem('koinlyHardWarningAssets', 
+        JSON.stringify(Array.from(problematicAssets.hard)));
+      
+      return {
+        softWarningAssets: Array.from(problematicAssets.soft),
+        hardWarningAssets: Array.from(problematicAssets.hard)
+      };
     } catch (error) {
       console.error('Error downloading Koinly CSV:', error);
       throw error;
@@ -410,25 +467,26 @@ export class FileUploader {
 
     return deposits.map(deposit => {
       const [amountStr, coin] = deposit.accountValueChange.split(' ');
-      const amount = parseFloat(amountStr);
-      const fee = parseFloat(deposit.fee || 0);
+      // Use Math.abs to ensure no negative values
+      const amount = Math.abs(parseFloat(amountStr));
+      const fee = Math.abs(parseFloat(deposit.fee || 0));
       const action = deposit.action.toLowerCase();
       const coinAddress = tokenAddressMap[coin] || coin;
       
-      const isDeposit = ['deposit', 'receive.spot', 'receive.usdc.perps.wallet', 'vault.distribution', 'vault.withdrawal','open.interest.reward', 'genesis.distribution'].includes(action);
-      const isInternalTransfer = ['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action);
+      const isReceived = ['deposit', 'receive.spot', 'receive.usdc.perps.wallet', 'vault.distribution', 'vault.withdrawal','open.interest.reward', 'genesis.distribution','spot.perp.transfer'].includes(action);
+      const isInternalTransfer = ['perp.spot.transfer', 'sub.account.transfer','spot.perp.transfer'].includes(action);
       
       const feeAmount = fee > 0 ? fee.toString() : '';
       const feeCurrency = fee > 0 ? coinAddress : '';
       const feeCurrencyDisplay = fee > 0 ? coin : '';
 
-      const sentAmount = !isDeposit ? amount.toString() : '';
-      const sentCurrency = !isDeposit ? coinAddress : '';
-      const sentCurrencyDisplay = !isDeposit ? coin : '';
+      const sentAmount = !isReceived ? amount.toString() : '';
+      const sentCurrency = !isReceived ? coinAddress : '';
+      const sentCurrencyDisplay = !isReceived ? coin : '';
 
-      const receivedAmount = isDeposit ? amount.toString() : '';
-      const receivedCurrency = isDeposit ? coinAddress : '';
-      const receivedCurrencyDisplay = isDeposit ? coin : '';
+      const receivedAmount = isReceived ? amount.toString() : '';
+      const receivedCurrency = isReceived ? coinAddress : '';
+      const receivedCurrencyDisplay = isReceived ? coin : '';
 
       // Get netWorthAmount and netWorthCurrency from the deposit if they exist
       const netWorthAmount = deposit.netWorthAmount || '';
@@ -437,27 +495,43 @@ export class FileUploader {
       let eventLabel = '';
       let tag = '';
       let description = '';
-      if (['deposit', 'receive.spot', 'receive.usdc.perps.wallet'].includes(action)) {
-        eventLabel = 'Deposit';
-        description = `Deposited ${amount} ${coin}`;
-      } else if (['withdrawal', 'send.spot', 'send.usdc.perps.wallet'].includes(action)) {
-        eventLabel = 'Withdrawal';
-        description = `Withdrew ${amount} ${coin}`;
+      if (action === 'deposit') {
+        eventLabel = 'Bridge In';
+        description = `Bridged in ${amount} ${coin}`;
+      } else if (action === 'withdrawal') {
+        eventLabel = 'Bridge Out';
+        description = `Bridged out ${amount} ${coin}`;
+      } else if (action === 'receive.spot') {
+        eventLabel = coin === 'USDC' ? 'Receive USDC' : 'Receive Tokens';
+        description = `Received ${amount} ${coin}`;
+      } else if (action === 'receive.usdc.perps.wallet') {
+        eventLabel = 'Receive USDC';
+        description = `Received ${amount} ${coin}`;
+      } else if (action === 'send.spot') {
+        eventLabel = coin === 'USDC' ? 'Send USDC' : 'Send Tokens';
+        description = `Sent ${amount} ${coin}`;
+      } else if (action === 'send.usdc.perps.wallet') {
+        eventLabel = 'Send USDC';
+        description = `Sent ${amount} ${coin}`;
       } else if (['create.vault.capitalize', 'vault.deposit'].includes(action)) {
         eventLabel = 'Vault Deposit';
-        tag = 'Add to Pool';
-        description = `Deposited ${amount} ${coin} to Vault`;
+        description = `Deposited ${amount} ${coin} to unspecified vault [LIQUIDITY IN]`;
       } else if (['vault.distribution', 'vault.withdrawal'].includes(action)) {
         eventLabel = 'Vault Withdrawal';
-        tag = 'Remove from Pool';
-        description = `Withdrew ${amount} ${coin} from Vault`;
-      } else if (['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action)) {
-        eventLabel = 'Internal Transfer';
-        description = `Transferred ${amount} ${coin} between subaccounts or spot and perp accounts`;
+        description = `Withdrew ${amount} ${coin} from unspecified vault [LIQUIDITY OUT]`;
+      } else if (action === 'perp.spot.transfer') {
+        eventLabel = 'Intrawallet Transfer';
+        description = `Transferred ${amount} ${coin} from Perpetual to Spot account [INTRAWALLET TRANSFER]`;
+      } else if (action === 'sub.account.transfer') {
+        eventLabel = 'Intrawallet Transfer';
+        description = `Transferred ${amount} ${coin} between Subaccounts [INTRAWALLET TRANSFER]`;
+      } else if (action === 'spot.perp.transfer') {
+        eventLabel = 'Intrawallet Transfer';
+        description = `Transferred ${amount} ${coin} from Spot to Perpetual account [INTRAWALLET TRANSFER]`;
       } else if (action === 'open.interest.reward') {
         eventLabel = 'Open Interest Reward';
         tag = 'Reward';
-        description = `Received ${amount} ${coin} interest reward`;
+        description = `Received ${amount} ${coin} open interest reward`;
       } else if (action === 'genesis.distribution') {
         eventLabel = `${coin} Airdrop`;
         tag = 'Airdrop';
@@ -594,18 +668,16 @@ export class FileUploader {
       let description = '';
       if (actionType === 'delegate') {
         eventLabel = 'Stake HYPE';
-        tag = 'Stake';
-        description = `Staked ${amount} ${coin}`;
+        description = `Staked ${amount} ${coin} [STAKE/DELEGATE]`;
       } else if (actionType === 'undelegate') {
         eventLabel = 'Unstake HYPE';
-        tag = 'Stake';
-        description = `Unstaked ${amount} ${coin}`;
+        description = `Unstaked ${amount} ${coin} [UNSTAKE/UNDELEGATE]  `;
       } else if (actionType === 'deposit') {
         eventLabel = 'Transfer Spot to Staking';
-        description = `Internal Transfer: Transferred ${amount} ${coin} from Spot to Staking`;
+        description = `Transferred ${amount} ${coin} from Spot to Staking [INTRAWALLET TRANSFER]`;
       } else if (actionType === 'withdrawal') {
         eventLabel = 'Transfer Staking to Spot';
-        description = `Internal Transfer: Transferred ${amount} ${coin} from Staking to Spot`;
+        description = `Transferred ${amount} ${coin} from Staking to Spot [INTRAWALLET TRANSFER]`;
       }
       
       return {
@@ -691,7 +763,6 @@ export class FileUploader {
 
   // Clears all data from localStorage
   static clearLocalStorage() {
-    console.log('Clearing all data from localStorage');
     
     // Clear token address map
     localStorage.removeItem('tokenAddressMap');
@@ -745,7 +816,7 @@ export class FileUploader {
           }
         }
       });
-      
+
       return { 
         pairToTokenMap: tokenMap,
         tokenAddressMap: tokenAddressMap
@@ -808,20 +879,21 @@ export class FileUploader {
       // Generate two rows for each token
       const rows = Object.entries(tokenAddressMap).flatMap(([token, address]) => [
         // Row with full address format
-        [
-          new Date().toISOString(), // Current date
-          '', // Sent Amount
-          '', // Sent Currency
-          '1', // Received Amount
-          address, // Full token address (e.g., PURR:address:HYPE)
-          '', // Fee Amount
-          '', // Fee Currency
-          '', // Net Worth Amount
-          '', // Net Worth Currency
-          '', // Label
-          `Test transaction for ${token} using full address`, // Description with token name
-          '' // TxHash
-        ],
+        // [
+        //   new Date().toISOString(), // Current date
+        //   '', // Sent Amount
+        //   '', // Sent Currency
+        //   '1', // Received Amount
+        //   address, // Full token address (e.g., PURR:address:HYPE)
+        //   '', // Fee Amount
+        //   '', // Fee Currency
+        //   '', // Net Worth Amount
+        //   '', // Net Worth Currency
+        //   '', // Label
+        //   `Test transaction for ${token} using full address`, // Description with token name
+        //   '' // TxHash
+        // ]
+        // ,
         // Row with just token symbol
         [
           new Date().toISOString(), // Current date
@@ -865,7 +937,6 @@ export class FileUploader {
       link.click();
       document.body.removeChild(link);
       
-      console.log('Test Koinly CSV file download initiated');
     } catch (error) {
       console.error('Error generating test Koinly CSV:', error);
       throw error;
