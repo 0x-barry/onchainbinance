@@ -87,7 +87,7 @@ function App() {
           </Nav>
 
           <Routes>
-            <Route path="/" element={<Navigate to="/upload" replace />} />
+            <Route path="/" element={<Navigate to="/calculator/solana" replace />} />
             <Route path="/upload" element={<Upload onDataProcessed={handleDataProcessed} />} />
             <Route path="/airdrop-config" element={<AirdropConfig timeline={timeline} onUpdate={handleTimelineUpdate} />} />
             <Route path="/koinly-guide" element={<KoinlyGuide timeline={timeline} />} />
