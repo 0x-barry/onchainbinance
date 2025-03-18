@@ -266,25 +266,6 @@ const LoadingSubText = styled.p`
   font-family: ${props => props.theme.fonts.body};
 `;
 
-const ProcessButton = styled.button`
-  background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
-  border: none;
-  border-radius: ${props => props.theme.borderRadius.small};
-  color: ${props => props.theme.colors.background};
-  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
-  font-size: 1rem;
-  font-weight: ${props => props.theme.fontWeights.bold};
-  padding: 0.75rem 1.5rem;
-  width: 100%;
-  transition: background-color 0.3s;
-  font-family: ${props => props.theme.fonts.body};
-
-  &:hover {
-    background-color: ${props => props.disabled ? props.theme.colors.secondary : props.theme.colors.primary};
-    opacity: ${props => props.disabled ? 1 : 0.9};
-  }
-`;
-
 const ErrorMessage = styled.div`
   background: ${props => props.theme.colors.error};
   opacity: 0.1;
@@ -314,6 +295,17 @@ const Upload = () => {
       instructions: 'Portfolio > Trade History > Export CSV',
       link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'trade_history',
+      color: '#4285F4', // Google blue
+      icon: 'document'
+    },
+    {
+      id: 'twap_history',
+      name: 'TWAP History',
+      required: false,
+      instructions: 'Portfolio > TWAP > Fill History > Export CSV',
+      link: 'https://app.hyperliquid.xyz/portfolio',
+      filePrefix: 'trade_history',
+      description: 'Will be combined with Trade History. For proper detection, ensure file name contains "twap".',
       color: '#4285F4', // Google blue
       icon: 'document'
     },
@@ -377,8 +369,17 @@ const Upload = () => {
   }, [files]);
 
   const getFileByPrefix = (prefix) => {
-    const fileName = Object.keys(files).find(name => name.startsWith(prefix));
-    return files[fileName] || [];
+    // Get all files that match the prefix
+    const matchingFileNames = Object.keys(files).filter(name => name.startsWith(prefix));
+    
+    // If no matching files, return empty array
+    if (matchingFileNames.length === 0) return [];
+    
+    // If only one file, return its data
+    if (matchingFileNames.length === 1) return files[matchingFileNames[0]];
+    
+    // If multiple files (e.g., both trade_history and TWAP), combine their data
+    return matchingFileNames.flatMap(fileName => files[fileName] || []);
   };
 
   const hasRequiredFiles = () => {
@@ -446,8 +447,14 @@ const Upload = () => {
       const stakingRewardsData = getFileByPrefix('rewardHistory');
       const stakingActionsData = getFileByPrefix('actionHistory');
       
+      // Check if we have both trade history and TWAP files
+      const tradeFileNames = Object.keys(files).filter(name => name.startsWith('trade_history'));
+      const hasBothTradeAndTWAP = tradeFileNames.length > 1;
+      
       console.log('Data to be stored:', {
         tradesLength: tradeData?.length,
+        tradeFilesCount: tradeFileNames.length,
+        combinedTradeAndTWAP: hasBothTradeAndTWAP,
         fundingLength: fundingData?.length,
         depositsLength: depositsData?.length,
         stakingRewardsLength: stakingRewardsData?.length,
@@ -533,7 +540,41 @@ const Upload = () => {
     });
   };
 
-  const getUploadedFileForType = (filePrefix) => {
+  const getUploadedFileForType = (filePrefix, typeId) => {
+    // For fileTypes that share the same prefix (e.g., trade_history and TWAP)
+    if (filePrefix === 'trade_history') {
+      // Get all files with this prefix
+      const matchingFiles = Object.keys(files).filter(name => name.startsWith(filePrefix));
+      
+      if (matchingFiles.length === 0) return null;
+      
+      // If we have multiple files with this prefix
+      if (matchingFiles.length > 1) {
+        // For Trade History (id: 'trade_history'), prioritize files with 'trade' in their name
+        if (typeId === 'trade_history') {
+          const tradeFile = matchingFiles.find(name => 
+            name.toLowerCase().includes('trade') && !name.toLowerCase().includes('twap'));
+          return tradeFile || matchingFiles[0]; // Fallback to first file if no specific trade file found
+        }
+        
+        // For TWAP History (id: 'twap_history'), prioritize files with 'twap' in their name
+        if (typeId === 'twap_history') {
+          const twapFile = matchingFiles.find(name => name.toLowerCase().includes('twap'));
+          return twapFile || matchingFiles[1] || matchingFiles[0]; // Try to use second file, fallback to first
+        }
+      }
+      
+      // If only one file, return it for the primary type (Trade History)
+      // and only return it for TWAP if it likely contains TWAP data
+      if (typeId === 'twap_history') {
+        const onlyFile = matchingFiles[0];
+        return onlyFile.toLowerCase().includes('twap') ? onlyFile : null;
+      }
+      
+      return matchingFiles[0];
+    }
+    
+    // For all other file types, use the original logic
     return Object.keys(files).find(name => name.startsWith(filePrefix));
   };
 
@@ -594,7 +635,7 @@ const Upload = () => {
           <FileStatusContainer>
             <FileStatusList ref={fileListRef}>
               {fileTypes.map(fileType => {
-                const uploadedFile = getUploadedFileForType(fileType.filePrefix);
+                const uploadedFile = getUploadedFileForType(fileType.filePrefix, fileType.id);
                 const isUploaded = !!uploadedFile;
                 
                 return (
@@ -611,7 +652,21 @@ const Upload = () => {
                       </FileTypeName>
                       <FileTypeStatus $isUploaded={isUploaded}>
                         {isUploaded 
-                          ? `${uploadedFile} (${files[uploadedFile].length} rows)` 
+                          ? (
+                            <>
+                              {uploadedFile} ({files[uploadedFile].length} rows)
+                              {fileType.id === 'trade_history' && uploadedFile.toLowerCase().includes('twap') && (
+                                <div style={{ color: '#FFC107', marginTop: '0.2rem', fontStyle: 'italic' }}>
+                                  Note: Using TWAP file for Trade History
+                                </div>
+                              )}
+                              {fileType.id === 'twap_history' && !uploadedFile.toLowerCase().includes('twap') && (
+                                <div style={{ color: '#FFC107', marginTop: '0.2rem', fontStyle: 'italic' }}>
+                                  Note: Using Trade History file for TWAP
+                                </div>
+                              )}
+                            </>
+                          )
                           : (
                             <>
                               <InstructionLink 
@@ -623,6 +678,11 @@ const Upload = () => {
                               </InstructionLink>
                             </>
                           )}
+                        {fileType.description && (
+                          <div style={{ fontSize: '0.7rem', marginTop: '0.2rem', opacity: '0.8' }}>
+                            {fileType.description}
+                          </div>
+                        )}
                       </FileTypeStatus>
                       {isUploaded && (
                         <FileProgress>
