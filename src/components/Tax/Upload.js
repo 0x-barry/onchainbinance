@@ -305,7 +305,7 @@ const Upload = () => {
       instructions: 'Portfolio > TWAP > Fill History > Export CSV',
       link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'trade_history',
-      description: 'Will be combined with Trade History. For proper detection, ensure file name contains "twap".',
+      description: 'For proper detection, rename file to begin with "trade_history_twap"',
       color: '#4285F4', // Google blue
       icon: 'document'
     },
