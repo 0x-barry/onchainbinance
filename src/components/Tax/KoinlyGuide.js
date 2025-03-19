@@ -237,13 +237,15 @@ const KoinlyGuide = () => {
           Step 1: Manually Import Unsupported Assets
         </CollapsibleTitle>
         <CollapsibleContent $isExpanded={expandedSections.step1}>
-          <p>For transactions involving unsupported assets:</p>
+          <p>For transactions involving unsupported assets, Koinly recommends using NULLx placeholders:</p>
           <OrderedList>
             <ListItem>Go to <strong>Transactions</strong> in Koinly</ListItem>
             <ListItem>Filter by Description containing "WARNING"</ListItem>
-            <ListItem>For each transaction, you may need to manually add it in Koinly</ListItem>
-            <ListItem>Consider using a placeholder asset and then editing it</ListItem>
-            <ListItem>Ensure you maintain accurate cost basis information</ListItem>
+            <ListItem>For each transaction with unsupported tokens, use the Koinly NULLx placeholders (NULL1, NULL2, NULL3, etc.)</ListItem>
+            <ListItem>Keep track of which NULL placeholder you use for each unsupported token (e.g., NULL1 for ILIENS, NULL2 for PURRPS)</ListItem>
+            <ListItem>Add detailed descriptions in each transaction that clearly specify the actual token name (e.g., "This is actually ILIENS token")</ListItem>
+            <ListItem>Ensure you maintain accurate cost basis information for each transaction</ListItem>
+            <ListItem>Use the same NULL placeholder consistently for the same token across all transactions</ListItem>
           </OrderedList>
           
           {hardWarningAssets.length > 0 && (
@@ -255,7 +257,7 @@ const KoinlyGuide = () => {
                 ))}
               </AssetTags>
               <AssetListDescription>
-                Koinly may reject transactions with these assets. You'll need to handle these manually.
+                Koinly doesn't support these assets directly. Use NULLx placeholders (NULL1, NULL2, etc.) when manually adding these transactions and clearly note the actual token name in the description.
               </AssetListDescription>
             </AssetList>
           )}
@@ -270,7 +272,7 @@ const KoinlyGuide = () => {
           <p>Intrawallet transfers within your Hyperliquid account (i.e., between spot and perps accounts, between subaccounts, or between spot and staking balances) can potentially be ignored within Koinly as they are transfers within the same wallet:</p>
           <OrderedList>
             <ListItem>Go to <strong>Transactions</strong> in Koinly</ListItem>
-            <ListItem>Filter by Description containing "Internal Transfer"</ListItem>
+            <ListItem>Filter by Description containing [INTRAWALLET TRANSFER]</ListItem>
             <ListItem>Consider removing these transactions from your report</ListItem>
             <ListItem>If you want to keep them, ensure they're properly accounted for as a transfer</ListItem>
           </OrderedList>
@@ -302,13 +304,13 @@ const KoinlyGuide = () => {
           Step 4: Tag Vault Transactions
         </CollapsibleTitle>
         <CollapsibleContent $isExpanded={expandedSections.step4}>
-          <p>Vault or liquidity provision transactions need special tags in Koinly that cannot be applied via CSV import:</p>
+          <p>Vault or liquidity provision transactions need to be handled manually, otherwise they will be treated as disposals and acquisitions:</p>
           <OrderedList>
             <ListItem>Go to <strong>Transactions</strong> in Koinly</ListItem>
-            <ListItem>Filter by Description containing "Liquidity In" or "Liquidity Out"</ListItem>
-            <ListItem>For each "Liquidity In" transaction, edit it and apply the <strong>Pool In</strong> tag</ListItem>
-            <ListItem>For each "Liquidity Out" transaction, edit it and apply the <strong>Pool Out</strong> tag</ListItem>
-            <ListItem>These tags ensure proper tax treatment of liquidity provision activities</ListItem>
+            <ListItem>Filter by Description containing "[VAULT DEPOSIT]" or "[VAULT WITHDRAWAL]"</ListItem>
+            <ListItem>For each "VAULT DEPOSIT" transaction, edit it and apply the <strong>Pool In</strong> tag</ListItem>
+            <ListItem>For each "VAULT WITHDRAWAL" transaction, edit it and apply the <strong>Pool Out</strong> tag</ListItem>
+            <ListItem>Consult an accountant. These transactions should probably be tagged as "Liquidity In" and "Liquidity Out" respectively, but Koinly doesn't support this. You will likely need to deal with some manual adjustments of amounts here if you made or lost money in a vault like HLP.</ListItem>
           </OrderedList>
           <AssetListDescription>
             <strong>Note:</strong> "Pool In" and "Pool Out" tags cannot be applied via CSV import and must be added manually in the Koinly interface.
@@ -378,8 +380,10 @@ const KoinlyGuide = () => {
           <p>If Koinly misidentifies an asset:</p>
           <UnorderedList>
             <ListItem>Edit the transaction and select the correct asset</ListItem>
-            <ListItem>If the asset doesn't exist in Koinly, you may need to add it manually</ListItem>
-            <ListItem>Consider using a similar asset as a placeholder if necessary</ListItem>
+            <ListItem>If the asset doesn't exist in Koinly, use the NULLx placeholders (NULL1, NULL2, etc.)</ListItem>
+            <ListItem>Add a detailed description that clearly specifies the actual token name</ListItem>
+            <ListItem>Maintain consistency by using the same NULL placeholder for the same token across all transactions</ListItem>
+            <ListItem>Keep a record of which NULL placeholder corresponds to which token for your reference</ListItem>
           </UnorderedList>
           
           <SubsectionTitle>Cost Basis Issues</SubsectionTitle>

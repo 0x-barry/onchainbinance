@@ -532,10 +532,10 @@ export class FileUploader {
         description = `Sent ${amount} ${coin}`;
       } else if (['create.vault.capitalize', 'vault.deposit'].includes(action)) {
         eventLabel = 'Vault Deposit';
-        description = `Deposited ${amount} ${coin} to unspecified vault [LIQUIDITY IN]`;
+        description = `Deposited ${amount} ${coin} to unspecified vault [VAULT DEPOSIT]`;
       } else if (['vault.distribution', 'vault.withdrawal'].includes(action)) {
         eventLabel = 'Vault Withdrawal';
-        description = `Withdrew ${amount} ${coin} from unspecified vault [LIQUIDITY OUT]`;
+        description = `Withdrew ${amount} ${coin} from unspecified vault [VAULT WITHDRAWAL]`;
       } else if (action === 'perp.spot.transfer') {
         eventLabel = 'Intrawallet Transfer';
         description = `Transferred ${amount} ${coin} from Perpetual to Spot account [INTRAWALLET TRANSFER]`;
