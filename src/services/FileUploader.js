@@ -91,6 +91,23 @@ export class FileUploader {
           else if (file.name.includes('rewardHistory')) fileType = 'stakingRewards';
           else if (file.name.includes('actionHistory')) fileType = 'stakingActions';
           
+          // Detect date format if file has a time field
+          const hasTimeField = results.meta.fields?.includes('time');
+          
+          if (hasTimeField && results.data.length > 0) {
+            // Get date samples - up to 20 samples
+            const dateSamples = results.data
+              .slice(0, Math.min(20, results.data.length))
+              .map(row => row.time)
+              .filter(Boolean);
+            
+            if (dateSamples.length > 0) {
+              // Detect and store the date format
+              this.dateFormat = this.detectDateFormat(dateSamples);
+              console.log(`Detected date format: ${this.dateFormat}`);
+            }
+          }
+          
           if (fileType) {
             try {
               this.validateCSVFormat(results.data, fileType);
@@ -747,7 +764,17 @@ export class FileUploader {
       // Handle date-time format (e.g., '11/1/2023 - 12:00:37') for other CSVs
       if (dateStr.includes(' - ')) {
         const [datePart, timePart] = dateStr.split(' - ');
-        const [month, day, year] = datePart.split('/');
+        
+        // Use the detected date format or fall back to MM/DD/YYYY
+        const dateFormat = this.dateFormat || 'MM/DD/YYYY';
+        let month, day, year;
+        
+        if (dateFormat === 'MM/DD/YYYY') {
+          [month, day, year] = datePart.split('/');
+        } else {
+          [day, month, year] = datePart.split('/');
+        }
+        
         const [hours, minutes, seconds] = timePart.split(':');
         
         // Create date in UTC to avoid timezone issues
@@ -758,6 +785,58 @@ export class FileUploader {
     } catch (error) {
       console.error(`Date parsing error for "${dateStr}":`, error);
       throw new Error(`Failed to parse date: ${dateStr}`);
+    }
+  }
+
+  /**
+   * Detects whether dates in the provided sample are in MM/DD/YYYY or DD/MM/YYYY format
+   * @param {Array<string>} dateSamples - Array of date strings to analyze
+   * @returns {string} - 'MM/DD/YYYY' or 'DD/MM/YYYY'
+   */
+  static detectDateFormat(dateSamples) {
+    // Initialize counters for each format
+    let mmddCount = 0;
+    let ddmmCount = 0;
+    
+    // Process each date in the sample
+    for (const fullDateStr of dateSamples) {
+      // Extract just the date part if it's in the format with time
+      let dateStr = fullDateStr;
+      if (fullDateStr.includes(' - ')) {
+        dateStr = fullDateStr.split(' - ')[0];
+      }
+      
+      // Skip if not in expected format with slashes
+      if (!dateStr.includes('/')) continue;
+      
+      const parts = dateStr.split('/');
+      if (parts.length !== 3) continue;
+      
+      const num1 = parseInt(parts[0], 10);
+      const num2 = parseInt(parts[1], 10);
+      
+      // Check for unambiguous date formats
+      if (num1 > 12 && num2 <= 12) {
+        // First number > 12, must be DD/MM format
+        ddmmCount++;
+      } else if (num1 <= 12 && num2 > 12) {
+        // Second number > 12, must be MM/DD format
+        mmddCount++;
+      }
+      // Ambiguous dates don't contribute to either count
+    }
+    
+    console.log(`Date format detection results: MM/DD count: ${mmddCount}, DD/MM count: ${ddmmCount}`);
+    
+    // Determine format based on which has more unambiguous examples
+    if (ddmmCount > mmddCount) {
+      return 'DD/MM/YYYY';
+    } else if (mmddCount > ddmmCount) {
+      return 'MM/DD/YYYY';
+    } else {
+      // If tied or no unambiguous dates found, return default
+      console.log('Inconclusive date format detection, using MM/DD/YYYY as default');
+      return 'MM/DD/YYYY';
     }
   }
 
