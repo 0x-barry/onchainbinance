@@ -178,7 +178,7 @@ const Summary = () => {
         console.error(error);
         setError(error);
         setIsLoading(false);
-        navigate('/');
+        navigate('/tax');
         return;
       }
 
@@ -224,7 +224,7 @@ const Summary = () => {
   }, [timeline]);
 
   const handleStartOver = () => {    // Navigate to upload page
-    navigate('/upload');
+    navigate('/tax');
   };
 
   const filteredTimeline = timeline.filter(event => {
@@ -598,7 +598,7 @@ const Summary = () => {
         <WizardNavigation>
           <WizardButton 
             primary
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/tax')}
             rightIcon={<RightArrowIcon />}
           >
             Return to Upload

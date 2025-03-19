@@ -525,7 +525,7 @@ const AirdropConfig = () => {
         <WizardNavigation>
           <WizardButton 
             primary
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate('/tax')}
             rightIcon={<RightArrowIcon />}
           >
             Return to Upload
@@ -547,7 +547,7 @@ const AirdropConfig = () => {
         
         <WizardNavigation>
           <WizardButton 
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate('/tax')}
             leftIcon={<LeftArrowIcon />}
           >
             Back to Upload
@@ -622,7 +622,7 @@ const AirdropConfig = () => {
       
       <WizardNavigation>
         <WizardButton 
-          onClick={() => navigate('/upload')}
+          onClick={() => navigate('/tax')}
           leftIcon={<LeftArrowIcon />}
         >
           Back to Upload

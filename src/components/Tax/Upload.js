@@ -305,14 +305,14 @@ const Upload = () => {
       instructions: 'Portfolio > TWAP > Fill History > Export CSV',
       link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'trade_history',
-      description: 'For proper detection, rename file to begin with "trade_history_twap"',
+      description: 'For proper detection, rename file to contain the word "twap"',
       color: '#4285F4', // Google blue
       icon: 'document'
     },
     {
       id: 'funding_history',
       name: 'Funding History',
-      required: true,
+      required: false,
       instructions: 'Portfolio > Funding History > Export CSV',
       link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'funding_history',

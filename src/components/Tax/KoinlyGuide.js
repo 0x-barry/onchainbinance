@@ -162,7 +162,7 @@ const KoinlyGuide = () => {
   useEffect(() => {
     if (!location.state?.timeline) {
       console.warn('Attempted to access KoinlyGuide without timeline data, redirecting to upload');
-      navigate('/upload');
+      navigate('/tax');
     }
   }, [location.state, navigate]);
   

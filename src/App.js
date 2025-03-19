@@ -82,13 +82,13 @@ function App() {
                   Market Cap
                 </StyledNavLink>
               </li>
-              <li><StyledNavLink to="/upload">Tax</StyledNavLink></li>
+              <li><StyledNavLink to="/tax">Tax</StyledNavLink></li>
             </NavList>
           </Nav>
 
           <Routes>
             <Route path="/" element={<Navigate to="/calculator/solana" replace />} />
-            <Route path="/upload" element={<Upload onDataProcessed={handleDataProcessed} />} />
+            <Route path="/tax" element={<Upload onDataProcessed={handleDataProcessed} />} />
             <Route path="/airdrop-config" element={<AirdropConfig timeline={timeline} onUpdate={handleTimelineUpdate} />} />
             <Route path="/koinly-guide" element={<KoinlyGuide timeline={timeline} />} />
             <Route path="/summary" element={<Summary timeline={timeline} />} />
