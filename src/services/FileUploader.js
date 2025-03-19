@@ -293,7 +293,8 @@ export class FileUploader {
 
     return trades.map(trade => {
       const direction = trade.dir.toLowerCase();
-      const isSpot = direction.includes('buy') || direction.includes('sell');
+      const isSpotDustConversion = direction.includes('dust');
+      const isSpot = direction.includes('buy') || direction.includes('sell') || isSpotDustConversion;
       const isBuyOrOpen = direction.includes('buy') || direction.includes('open');
       const price = parseFloat(trade.px);
       const size = parseFloat(trade.sz);
@@ -333,6 +334,16 @@ export class FileUploader {
           feeAmount = fee.toString(); // Fee is in coin for spot buys
           feeCurrency = coinAddress;
           feeCurrencyDisplay = coin;
+        } else if (isSpotDustConversion) {
+          sentAmount = size.toString();
+          sentCurrency = coinAddress;
+          sentCurrencyDisplay = coin;
+          receivedAmount = pnl.toString();
+          receivedCurrency = usdcAddress;
+          receivedCurrencyDisplay = usdc;
+          feeAmount = '';
+          feeCurrency = '';
+          feeCurrencyDisplay = '';
         } else {
           sentAmount = size.toString();
           sentCurrency = coinAddress;
@@ -344,7 +355,7 @@ export class FileUploader {
           feeCurrency = usdcAddress;
           feeCurrencyDisplay = usdc;
         }
-      // Perp trade logic
+        // Pade logic
       } else {
         if (isBuyOrOpen) {
           if (fee < 0) {
