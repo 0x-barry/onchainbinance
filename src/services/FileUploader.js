@@ -153,8 +153,7 @@ export class FileUploader {
         throw new Error('No timeline data provided');
       }
 
-      // Import asset support helpers
-      const { formatCurrencyForKoinly, getAssetWarningType } = require('./KoinlyAssetSupport');
+      const { getAssetWarningType } = require('./KoinlyAssetSupport');
       
       // Track problematic assets for reporting
       const problematicAssets = {
@@ -178,19 +177,12 @@ export class FileUploader {
         'TxHash'
       ];
 
-      // Convert timeline data to CSV rows
-      const rows = timeline.map(event => {
-        // Get original currencies
+      // First pass: identify all problematic assets
+      timeline.forEach(event => {
         const sentCurrencyDisplay = event.display.sentCurrency;
         const receivedCurrencyDisplay = event.display.receivedCurrency;
         const feeCurrencyDisplay = event.display.feeCurrency;
         
-        // Format currencies for Koinly
-        const sentCurrencyKoinly = formatCurrencyForKoinly(event.koinly.sentCurrency);
-        const receivedCurrencyKoinly = formatCurrencyForKoinly(event.koinly.receivedCurrency);
-        const feeCurrencyKoinly = formatCurrencyForKoinly(event.koinly.feeCurrency);
-        
-        // Check support status and track problematic assets
         if (sentCurrencyDisplay) {
           const warningType = getAssetWarningType(sentCurrencyDisplay);
           if (warningType === 'soft') problematicAssets.soft.add(sentCurrencyDisplay);
@@ -208,66 +200,38 @@ export class FileUploader {
           if (warningType === 'soft') problematicAssets.soft.add(feeCurrencyDisplay);
           if (warningType === 'hard') problematicAssets.hard.add(feeCurrencyDisplay);
         }
-        
-        // Enhance description with warning for problematic assets
-        let description = event.koinly.description;
-        const hasHardWarningAsset = [sentCurrencyDisplay, receivedCurrencyDisplay, feeCurrencyDisplay].some(
-          currency => currency && getAssetWarningType(currency) === 'hard'
-        );
-        const hasSoftWarningAsset = [sentCurrencyDisplay, receivedCurrencyDisplay, feeCurrencyDisplay].some(
-          currency => currency && getAssetWarningType(currency) === 'soft'
-        );
-        
-        if (hasHardWarningAsset) {
-          description += " [WARNING: Contains unsupported assets]";
-        } else if (hasSoftWarningAsset) {
-          description += " [REVIEW: Contains assets with limited Koinly support]";
-        }
-        
-        return [
-          event.time,
-          event.koinly.sentAmount,
-          sentCurrencyKoinly,
-          event.koinly.receivedAmount,
-          receivedCurrencyKoinly,
-          event.koinly.feeAmount,
-          feeCurrencyKoinly,
-          event.koinly.netWorthAmount || '',
-          event.koinly.netWorthCurrency || '',
-          event.koinly.tag,
-          description,
-          '' // TxHash
-        ].map(cell => {
-          // Escape cells containing commas or quotes
-          if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
-            return `"${cell.toString().replace(/"/g, '""')}"`;
-          }
-          return cell;
-        });
       });
 
-      // Combine headers and rows
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.join(','))
-      ].join('\n');
-      
-      // Create a Blob with the CSV content
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      
-      // Create a download link
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      
-      // Set link properties
-      link.setAttribute('href', url);
-      link.setAttribute('download', 'hyperliquid_transactions_koinly.csv');
-      link.style.visibility = 'hidden';
-      
-      // Add to document, click and remove
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Create NULL mappings for hard warning assets after we've identified them all
+      const nullMappings = this.createNullMappings(Array.from(problematicAssets.hard));
+
+      // Second pass: create rows with NULL prefixes
+      const { mainRows, unsupportedRows } = timeline.reduce((acc, event) => {
+        // Create row with NULL prefixes for hard warning assets
+        const row = this.createKoinlyRow(event, nullMappings);
+        
+        // Check if this row has any hard warning assets
+        const sentCurrencyDisplay = event.display.sentCurrency;
+        const receivedCurrencyDisplay = event.display.receivedCurrency;
+        const feeCurrencyDisplay = event.display.feeCurrency;
+        
+        const hasHardWarning = [sentCurrencyDisplay, receivedCurrencyDisplay, feeCurrencyDisplay].some(
+          currency => currency && getAssetWarningType(currency) === 'hard'
+        );
+        
+        if (hasHardWarning) {
+          acc.unsupportedRows.push(row);
+        }
+        acc.mainRows.push(row);
+        
+        return acc;
+      }, { mainRows: [], unsupportedRows: [] });
+
+      // Create and download both CSVs
+      this.downloadCSV(headers, mainRows, 'hyperliquid_transactions_koinly.csv');
+      if (unsupportedRows.length > 0) {
+        this.downloadCSV(headers, unsupportedRows, 'hyperliquid_transactions_koinly_unsupported_assets.csv');
+      }
       
       // Store problematic assets in localStorage for the follow-up guide
       localStorage.setItem('koinlySoftWarningAssets', 
@@ -277,12 +241,95 @@ export class FileUploader {
       
       return {
         softWarningAssets: Array.from(problematicAssets.soft),
-        hardWarningAssets: Array.from(problematicAssets.hard)
+        hardWarningAssets: Array.from(problematicAssets.hard),
+        nullMappings
       };
     } catch (error) {
       console.error('Error downloading Koinly CSV:', error);
       throw error;
     }
+  }
+
+  /**
+   * Creates a consistent mapping between unsupported assets and NULL numbers
+   * @param {Array<string>} unsupportedAssets - Array of unsupported asset names
+   * @returns {Object} - Mapping of asset names to NULL numbers
+   */
+  static createNullMappings(unsupportedAssets) {
+    const mappings = {};
+    unsupportedAssets.forEach((asset, index) => {
+      mappings[asset] = `NULL${901 + index}`;
+    });
+    return mappings;
+  }
+
+  /**
+   * Creates a row for the Koinly CSV, applying NULL prefixes to hard warning assets
+   * @param {Object} event - The timeline event
+   * @param {Object} nullMappings - Mapping of unsupported assets to NULL numbers
+   * @returns {Array} - The formatted row
+   */
+  static createKoinlyRow(event, nullMappings) {
+    const { getAssetWarningType, formatCurrencyForKoinly } = require('./KoinlyAssetSupport');
+    
+    // Format currency for Koinly, handling NULL prefix as a special case
+    const formatCurrency = (displayCurrency, koinlyCurrency) => {
+      if (!displayCurrency) return '';
+      
+      // Special case: if this is a hard warning asset, use NULL prefix
+      if (getAssetWarningType(displayCurrency) === 'hard') {
+        return nullMappings[displayCurrency];
+      }
+      
+      // Normal case: format the currency for Koinly
+      return formatCurrencyForKoinly(koinlyCurrency);
+    };
+    
+    return [
+      event.time,
+      event.koinly.sentAmount,
+      formatCurrency(event.display.sentCurrency, event.koinly.sentCurrency),
+      event.koinly.receivedAmount,
+      formatCurrency(event.display.receivedCurrency, event.koinly.receivedCurrency),
+      event.koinly.feeAmount,
+      formatCurrency(event.display.feeCurrency, event.koinly.feeCurrency),
+      event.koinly.netWorthAmount || '',
+      event.koinly.netWorthCurrency || '',
+      event.koinly.tag,
+      event.koinly.description,
+      '' // TxHash
+    ].map(cell => {
+      // Escape cells containing commas or quotes
+      if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
+        return `"${cell.toString().replace(/"/g, '""')}"`;
+      }
+      return cell;
+    });
+  }
+
+  /**
+   * Downloads a CSV file with the given headers and rows
+   * @param {Array<string>} headers - CSV headers
+   * @param {Array<Array>} rows - CSV rows
+   * @param {string} filename - Name of the file to download
+   */
+  static downloadCSV(headers, rows, filename) {
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   // Primary Data Processing

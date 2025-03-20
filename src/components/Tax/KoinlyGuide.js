@@ -14,18 +14,6 @@ const AnimatedLogo = styled.img`
   margin-right: auto;
 `;
 
-const Eyebrow = styled.h3`
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  font-family: ${props => props.theme.fonts.header};
-  width: 100%;
-
-  @media (min-width: 768px) {
-    font-size: 1.25rem;
-  }
-`;
-
 const GuideContainer = styled.div`
   max-width: 1000px;
   margin: 0 auto;

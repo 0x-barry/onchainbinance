@@ -133,21 +133,8 @@ const Select = styled.select`
   max-width: 150px;
 `;
 
-const ButtonContainer = styled.div`
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  position: sticky;
-  bottom: 0;
-  background: ${props => props.theme.colors.background};
-  padding: 1rem 0;
-  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.1);
-  z-index: 90;
-  margin-top: 2rem;
-`;
-
 const Button = styled.button`
-  background: ${props => props.$primary ? props.theme.colors.primary : props.theme.colors.secondary};
+  background: ${props => props.theme.colors.primary};
   color: ${props => props.theme.colors.background};
   border: none;
   border-radius: ${props => props.theme.borderRadius.small};
