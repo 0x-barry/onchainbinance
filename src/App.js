@@ -12,6 +12,32 @@ import AirdropConfig from './components/Tax/AirdropConfig';
 import KoinlyGuide from './components/Tax/KoinlyGuide';
 import { useState } from 'react';
 
+const AlphaTag = styled.span`
+  background-color: #ff4444;
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  cursor: help;
+  position: relative;
+  
+  &:hover::after {
+    content: "Use At Your Own Risk";
+    position: absolute;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 5px);
+    z-index: 1000;
+  }
+`;
+
 const Nav = styled.nav`
   padding: 1rem;
   margin-bottom: 2rem;
@@ -82,7 +108,12 @@ function App() {
                   Market Cap
                 </StyledNavLink>
               </li>
-              <li><StyledNavLink to="/tax">Tax</StyledNavLink></li>
+              <li>
+                <StyledNavLink to="/tax">
+                  Tax
+                  <AlphaTag>⚠️ ALPHA</AlphaTag>
+                </StyledNavLink>
+              </li>
             </NavList>
           </Nav>
 

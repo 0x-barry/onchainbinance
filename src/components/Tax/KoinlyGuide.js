@@ -222,18 +222,46 @@ const KoinlyGuide = () => {
       
       <CollapsibleSection>
         <CollapsibleTitle $isExpanded={expandedSections.step1} onClick={() => toggleSection('step1')}>
-          Step 1: Manually Import Unsupported Assets
+          Step 1: Handle Unsupported Assets
         </CollapsibleTitle>
         <CollapsibleContent $isExpanded={expandedSections.step1}>
-          <p>For transactions involving unsupported assets, Koinly recommends using NULLx placeholders:</p>
+          <p>For transactions involving unsupported assets, we've generated two separate CSV files:</p>
           <OrderedList>
-            <ListItem>Go to <strong>Transactions</strong> in Koinly</ListItem>
-            <ListItem>Filter by Description containing "WARNING"</ListItem>
-            <ListItem>For each transaction with unsupported tokens, use the Koinly NULLx placeholders (NULL1, NULL2, NULL3, etc.)</ListItem>
-            <ListItem>Keep track of which NULL placeholder you use for each unsupported token (e.g., NULL1 for ILIENS, NULL2 for PURRPS)</ListItem>
-            <ListItem>Add detailed descriptions in each transaction that clearly specify the actual token name (e.g., "This is actually ILIENS token")</ListItem>
-            <ListItem>Ensure you maintain accurate cost basis information for each transaction</ListItem>
-            <ListItem>Use the same NULL placeholder consistently for the same token across all transactions</ListItem>
+            <ListItem>
+              <strong>Main CSV (hyperliquid_transactions_koinly.csv)</strong>
+              <ul>
+                <li>Contains all your transactions with original token names</li>
+                <li>Upload this file to Koinly first</li>
+              </ul>
+            </ListItem>
+            <ListItem>
+              <strong>Unsupported Assets CSV (hyperliquid_transactions_koinly_unsupported_assets.csv)</strong>
+              <ul>
+                <li>Contains only transactions involving unsupported assets</li>
+                <li>Uses NULL prefixes (e.g., NULL901, NULL902) for unsupported tokens</li>
+                <li>Original token names are preserved in the transaction descriptions</li>
+                <li>Review this file before uploading to ensure the NULL mappings are consistent</li>
+              </ul>
+            </ListItem>
+          </OrderedList>
+          
+          <SubsectionTitle>Steps to Follow:</SubsectionTitle>
+          <OrderedList>
+            <ListItem>Upload the main CSV file (hyperliquid_transactions_koinly.csv) to Koinly first</ListItem>
+            <ListItem>Review the unsupported assets CSV to familiarize yourself with the NULL mappings:</ListItem>
+            <UnorderedList>
+              <ListItem>Each unsupported token has been assigned a consistent NULL number (starting from NULL901)</ListItem>
+              <ListItem>The original token names are preserved in the transaction descriptions</ListItem>
+              <ListItem>Make note of which NULL number corresponds to which token</ListItem>
+            </UnorderedList>
+            <ListItem>Upload the unsupported assets CSV to Koinly</ListItem>
+            <ListItem>After uploading, verify that:
+              <UnorderedList>
+                <ListItem>The NULL prefixes are consistent across all transactions</ListItem>
+                <ListItem>The amounts and dates match your records</ListItem>
+                <ListItem>The transaction descriptions clearly indicate the actual token names</ListItem>
+              </UnorderedList>
+            </ListItem>
           </OrderedList>
           
           {hardWarningAssets.length > 0 && (
@@ -245,7 +273,7 @@ const KoinlyGuide = () => {
                 ))}
               </AssetTags>
               <AssetListDescription>
-                Koinly doesn't support these assets directly. Use NULLx placeholders (NULL1, NULL2, etc.) when manually adding these transactions and clearly note the actual token name in the description.
+                These assets are not directly supported by Koinly. Check the unsupported assets CSV to see how they've been mapped to NULL prefixes.
               </AssetListDescription>
             </AssetList>
           )}
@@ -261,7 +289,7 @@ const KoinlyGuide = () => {
           <OrderedList>
             <ListItem>Go to <strong>Transactions</strong> in Koinly</ListItem>
             <ListItem>Filter by Description containing [INTRAWALLET TRANSFER]</ListItem>
-            <ListItem>Consider removing these transactions from your report</ListItem>
+            <ListItem>Delete these transactions</ListItem>
             <ListItem>If you want to keep them, ensure they're properly accounted for as a transfer</ListItem>
           </OrderedList>
         </CollapsibleContent>
@@ -276,9 +304,9 @@ const KoinlyGuide = () => {
           <OrderedList>
             <ListItem>Go to <strong>Transactions</strong> in Koinly</ListItem>
             <ListItem>Filter by Description containing "[STAKE/DELEGATE]"</ListItem>
-            <ListItem>For each staking transaction, edit it and apply the <strong>Pool In</strong> tag</ListItem>
+            <ListItem>Select all staking transactions, and apply the <strong>Pool In</strong> tag</ListItem>
             <ListItem>Then filter by Description containing "[UNSTAKE/UNDELEGATE]"</ListItem>
-            <ListItem>For each unstaking transaction, edit it and apply the <strong>Pool Out</strong> tag</ListItem>
+            <ListItem>Select all unstaking transactions, and apply the <strong>Pool Out</strong> tag</ListItem>
             <ListItem>These tags ensure proper tax treatment of your staking activities</ListItem>
           </OrderedList>
           <AssetListDescription>

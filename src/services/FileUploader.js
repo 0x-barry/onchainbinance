@@ -161,6 +161,24 @@ export class FileUploader {
         hard: new Set()
       };
 
+      // First pass: identify all problematic assets
+      timeline.forEach(event => {
+        const currencies = [
+          event.display.sentCurrency,
+          event.display.receivedCurrency,
+          event.display.feeCurrency
+        ].filter(Boolean);
+        
+        currencies.forEach(currency => {
+          const warningType = getAssetWarningType(currency);
+          if (warningType === 'soft') problematicAssets.soft.add(currency);
+          if (warningType === 'hard') problematicAssets.hard.add(currency);
+        });
+      });
+
+      // Create NULL mappings for hard warning assets
+      const nullMappings = this.createNullMappings(Array.from(problematicAssets.hard));
+
       // Define CSV headers
       const headers = [
         'Date',
@@ -177,58 +195,28 @@ export class FileUploader {
         'TxHash'
       ];
 
-      // First pass: identify all problematic assets
-      timeline.forEach(event => {
-        const sentCurrencyDisplay = event.display.sentCurrency;
-        const receivedCurrencyDisplay = event.display.receivedCurrency;
-        const feeCurrencyDisplay = event.display.feeCurrency;
-        
-        if (sentCurrencyDisplay) {
-          const warningType = getAssetWarningType(sentCurrencyDisplay);
-          if (warningType === 'soft') problematicAssets.soft.add(sentCurrencyDisplay);
-          if (warningType === 'hard') problematicAssets.hard.add(sentCurrencyDisplay);
-        }
-        
-        if (receivedCurrencyDisplay) {
-          const warningType = getAssetWarningType(receivedCurrencyDisplay);
-          if (warningType === 'soft') problematicAssets.soft.add(receivedCurrencyDisplay);
-          if (warningType === 'hard') problematicAssets.hard.add(receivedCurrencyDisplay);
-        }
-        
-        if (feeCurrencyDisplay) {
-          const warningType = getAssetWarningType(feeCurrencyDisplay);
-          if (warningType === 'soft') problematicAssets.soft.add(feeCurrencyDisplay);
-          if (warningType === 'hard') problematicAssets.hard.add(feeCurrencyDisplay);
-        }
-      });
+      // Create rows for both CSVs
+      const mainRows = timeline.map(event => this.createKoinlyRow(event));
+      
+      // Only include transactions with hard warning assets in the unsupported CSV
+      const unsupportedRows = timeline
+        .filter(event => {
+          const currencies = [
+            event.display.sentCurrency,
+            event.display.receivedCurrency,
+            event.display.feeCurrency
+          ].filter(Boolean);
+          
+          return currencies.some(currency => 
+            getAssetWarningType(currency) === 'hard'
+          );
+        })
+        .map(event => this.createUnsupportedKoinlyRow(event, nullMappings));
 
-      // Create NULL mappings for hard warning assets after we've identified them all
-      const nullMappings = this.createNullMappings(Array.from(problematicAssets.hard));
-
-      // Second pass: create rows with NULL prefixes
-      const { mainRows, unsupportedRows } = timeline.reduce((acc, event) => {
-        // Create row with NULL prefixes for hard warning assets
-        const row = this.createKoinlyRow(event, nullMappings);
-        
-        // Check if this row has any hard warning assets
-        const sentCurrencyDisplay = event.display.sentCurrency;
-        const receivedCurrencyDisplay = event.display.receivedCurrency;
-        const feeCurrencyDisplay = event.display.feeCurrency;
-        
-        const hasHardWarning = [sentCurrencyDisplay, receivedCurrencyDisplay, feeCurrencyDisplay].some(
-          currency => currency && getAssetWarningType(currency) === 'hard'
-        );
-        
-        if (hasHardWarning) {
-          acc.unsupportedRows.push(row);
-        }
-        acc.mainRows.push(row);
-        
-        return acc;
-      }, { mainRows: [], unsupportedRows: [] });
-
-      // Create and download both CSVs
+      // Download the main CSV
       this.downloadCSV(headers, mainRows, 'hyperliquid_transactions_koinly.csv');
+      
+      // Download the unsupported assets CSV if there are any rows
       if (unsupportedRows.length > 0) {
         this.downloadCSV(headers, unsupportedRows, 'hyperliquid_transactions_koinly_unsupported_assets.csv');
       }
@@ -269,20 +257,39 @@ export class FileUploader {
    * @param {Object} nullMappings - Mapping of unsupported assets to NULL numbers
    * @returns {Array} - The formatted row
    */
-  static createKoinlyRow(event, nullMappings) {
+  static createKoinlyRow(event) {
+    const { formatCurrencyForKoinly } = require('./KoinlyAssetSupport');
+    
+    return [
+      event.time,
+      event.koinly.sentAmount,
+      formatCurrencyForKoinly(event.koinly.sentCurrency),
+      event.koinly.receivedAmount,
+      formatCurrencyForKoinly(event.koinly.receivedCurrency),
+      event.koinly.feeAmount,
+      formatCurrencyForKoinly(event.koinly.feeCurrency),
+      event.koinly.netWorthAmount || '',
+      event.koinly.netWorthCurrency || '',
+      event.koinly.tag,
+      event.koinly.description,
+      '' // TxHash
+    ].map(cell => {
+      if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
+        return `"${cell.toString().replace(/"/g, '""')}"`;
+      }
+      return cell;
+    });
+  }
+
+  static createUnsupportedKoinlyRow(event, nullMappings) {
     const { getAssetWarningType, formatCurrencyForKoinly } = require('./KoinlyAssetSupport');
     
-    // Format currency for Koinly, handling NULL prefix as a special case
+    // Format currency, using NULL prefix for hard warning assets
     const formatCurrency = (displayCurrency, koinlyCurrency) => {
       if (!displayCurrency) return '';
-      
-      // Special case: if this is a hard warning asset, use NULL prefix
-      if (getAssetWarningType(displayCurrency) === 'hard') {
-        return nullMappings[displayCurrency];
-      }
-      
-      // Normal case: format the currency for Koinly
-      return formatCurrencyForKoinly(koinlyCurrency);
+      return getAssetWarningType(displayCurrency) === 'hard' 
+        ? nullMappings[displayCurrency]
+        : formatCurrencyForKoinly(koinlyCurrency);
     };
     
     return [
@@ -299,7 +306,6 @@ export class FileUploader {
       event.koinly.description,
       '' // TxHash
     ].map(cell => {
-      // Escape cells containing commas or quotes
       if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
         return `"${cell.toString().replace(/"/g, '""')}"`;
       }
