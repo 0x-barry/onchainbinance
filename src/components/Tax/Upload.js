@@ -21,18 +21,6 @@ const AnimatedLogo = styled.img`
   margin-right: auto;
 `;
 
-const Eyebrow = styled.h3`
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  font-family: ${props => props.theme.fonts.header};
-  width: 100%;
-
-  @media (min-width: 768px) {
-    font-size: 1.25rem;
-  }
-`;
-
 const Title = styled.h1`
   font-size: 2.25rem;
   margin-bottom: 3rem;
@@ -295,6 +283,7 @@ const Upload = () => {
       instructions: 'Portfolio > Trade History > Export CSV',
       link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'trade_history',
+      description: 'Check the "Aggregate" box on Portfolio page prior to exporting',
       color: '#4285F4', // Google blue
       icon: 'document'
     },
@@ -305,7 +294,7 @@ const Upload = () => {
       instructions: 'Portfolio > TWAP > Fill History > Export CSV',
       link: 'https://app.hyperliquid.xyz/portfolio',
       filePrefix: 'trade_history',
-      description: 'For proper detection, rename file to contain the word "twap"',
+      description: 'For proper detection, rename file to "trade_history_twap"',
       color: '#4285F4', // Google blue
       icon: 'document'
     },

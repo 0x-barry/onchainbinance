@@ -186,9 +186,9 @@ export class FileUploader {
         const feeCurrencyDisplay = event.display.feeCurrency;
         
         // Format currencies for Koinly
-        const sentCurrencyKoinly = formatCurrencyForKoinly(sentCurrencyDisplay);
-        const receivedCurrencyKoinly = formatCurrencyForKoinly(receivedCurrencyDisplay);
-        const feeCurrencyKoinly = formatCurrencyForKoinly(feeCurrencyDisplay);
+        const sentCurrencyKoinly = formatCurrencyForKoinly(event.koinly.sentCurrency);
+        const receivedCurrencyKoinly = formatCurrencyForKoinly(event.koinly.receivedCurrency);
+        const feeCurrencyKoinly = formatCurrencyForKoinly(event.koinly.feeCurrency);
         
         // Check support status and track problematic assets
         if (sentCurrencyDisplay) {
@@ -317,7 +317,9 @@ export class FileUploader {
       let feeAmount = '';
       let feeCurrency = '';
       let feeCurrencyDisplay = '';
-      let description = `${isSpot ? (isBuyOrOpen ? 'Buy' : 'Sell') : (isBuyOrOpen ? 'Open' : 'Close')} ${size} ${coin} at ${price} USDC per ${coin}`;
+      let description = isSpotDustConversion 
+        ? `Spot dust conversion of ${size} ${coin} to ${pnl} USDC`
+        : `${isSpot ? (isBuyOrOpen ? 'Buy' : 'Sell') : (isBuyOrOpen ? 'Open' : 'Close')} ${size} ${coin} at ${price} USDC per ${coin}`;
       const eventLabel = isSpot 
         ? `${isBuyOrOpen ? 'Buy' : 'Sell'} ${coin}`
         : `${isBuyOrOpen ? 'Open' : 'Close'} ${coin} ${direction.includes('long') ? 'Long' : 'Short'}`;
@@ -338,7 +340,7 @@ export class FileUploader {
           sentAmount = size.toString();
           sentCurrency = coinAddress;
           sentCurrencyDisplay = coin;
-          receivedAmount = pnl.toString();
+          receivedAmount = pnl.toString(); // Likely 0 if spot was just burned
           receivedCurrency = usdcAddress;
           receivedCurrencyDisplay = usdc;
           feeAmount = '';
@@ -355,12 +357,12 @@ export class FileUploader {
           feeCurrency = usdcAddress;
           feeCurrencyDisplay = usdc;
         }
-        // Pade logic
+        // Perp`trade logic
       } else {
         if (isBuyOrOpen) {
           if (fee < 0) {
             // Fee rebate
-            tag = 'Fee Refund';
+            tag = 'Realized Gain';
             receivedAmount = Math.abs(fee).toString();
             receivedCurrency = usdcAddress;
             receivedCurrencyDisplay = usdc;
@@ -502,7 +504,7 @@ export class FileUploader {
       const coinAddress = tokenAddressMap[coin] || coin;
       
       const isReceived = ['deposit', 'receive.spot', 'receive.usdc.perps.wallet', 'vault.distribution', 'vault.withdrawal','open.interest.reward', 'genesis.distribution','spot.perp.transfer'].includes(action);
-      const isInternalTransfer = ['perp.spot.transfer', 'sub.account.transfer','spot.perp.transfer'].includes(action);
+      const isInternalTransfer = ['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action);
       
       const feeAmount = fee > 0 ? fee.toString() : '';
       const feeCurrency = fee > 0 ? coinAddress : '';
@@ -614,46 +616,38 @@ export class FileUploader {
       throw new Error('Invalid staking rewards data format');
     }
 
-    return stakingRewards.map(reward => {
+    // Create a flattened array with two transactions for each reward
+    return stakingRewards.flatMap(reward => {
       const amount = parseFloat(reward.amount);
       const coin = 'HYPE';
       const coinAddress = tokenAddressMap[coin] || coin;
-
-      const sentAmount = '';
-      const sentCurrency = '';
-      const receivedAmount = amount.toString();
-      const receivedCurrency = coinAddress;
-      const receivedCurrencyDisplay = coin;
-      const feeAmount = '';
-      const feeCurrency = '';
-      const tag = 'Reward';
-      const eventLabel = 'Staking Reward';
-      const description = `Staking reward of ${amount} ${coin}`;
+      const rewardTime = this.parseDate(reward.time);
       
-      return {
-        time: this.parseDate(reward.time).toISOString(),
+      // First transaction: Receive the reward
+      const rewardTransaction = {
+        time: rewardTime.toISOString(),
         eventType: 'stakingReward',
         
         koinly: {
-          sentAmount,
-          sentCurrency,
-          receivedAmount,
-          receivedCurrency,
-          feeAmount,
-          feeCurrency,
-          tag,
-          description
+          sentAmount: '',
+          sentCurrency: '',
+          receivedAmount: amount.toString(),
+          receivedCurrency: coinAddress,
+          feeAmount: '',
+          feeCurrency: '',
+          tag: 'Reward',
+          description: `Staking reward of ${amount} ${coin}`
         },
         
         display: {
-          sentAmount,
-          sentCurrency,
-          receivedAmount,
-          receivedCurrency: receivedCurrencyDisplay,
-          feeAmount,
-          feeCurrency,
-          eventLabel,
-          description
+          sentAmount: '',
+          sentCurrency: '',
+          receivedAmount: amount.toString(),
+          receivedCurrency: coin,
+          feeAmount: '',
+          feeCurrency: '',
+          eventLabel: 'Staking Reward',
+          description: `Staking reward of ${amount} ${coin}`
         },
         
         details: {
@@ -663,6 +657,47 @@ export class FileUploader {
           }
         }
       };
+      
+      // Second transaction: Auto-stake the reward (1 second later)
+      const autoStakeTime = new Date(rewardTime.getTime() + 1000); // Add 1 second
+      const autoStakeTransaction = {
+        time: autoStakeTime.toISOString(),
+        eventType: 'stakingAction',
+        isInternalTransfer: false,
+        
+        koinly: {
+          sentAmount: amount.toString(),
+          sentCurrency: coinAddress,
+          receivedAmount: '',
+          receivedCurrency: '',
+          feeAmount: '',
+          feeCurrency: '',
+          tag: 'Add to Pool',
+          description: `Manual txn to account for auto-staking of ${amount} ${coin} reward [STAKE/DELEGATE]`
+        },
+        
+        display: {
+          sentAmount: amount.toString(),
+          sentCurrency: coin,
+          receivedAmount: '',
+          receivedCurrency: '',
+          feeAmount: '',
+          feeCurrency: '',
+          eventLabel: 'Auto-Stake Reward',
+          description: `Manual txn to account for auto-staking of ${amount} ${coin} reward [STAKE/DELEGATE]`
+        },
+        
+        details: {
+          staking: {
+            amount,
+            source: 'auto-stake',
+            originalReward: reward
+          }
+        }
+      };
+      
+      // Return both transactions
+      return [rewardTransaction, autoStakeTransaction];
     });
   }
 
