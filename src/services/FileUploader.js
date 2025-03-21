@@ -857,7 +857,10 @@ export class FileUploader {
 
       // Handle timestamp format (e.g., '1740950869326') for staking CSVs
       if (/^\d{13}$/.test(dateStr)) {
-        return new Date(parseInt(dateStr));
+        // Unix timestamps are UTC by definition
+        // Create date in UTC by using UTC methods
+        const timestamp = parseInt(dateStr);
+        return new Date(timestamp);
       }
 
       // Handle date-time format (e.g., '11/1/2023 - 12:00:37') for other CSVs
@@ -876,8 +879,28 @@ export class FileUploader {
         
         const [hours, minutes, seconds] = timePart.split(':');
         
-        // Create date in UTC to avoid timezone issues
-        return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+        // First create a local date object
+        const localDate = new Date(
+          parseInt(year),
+          parseInt(month) - 1,
+          parseInt(day),
+          parseInt(hours),
+          parseInt(minutes),
+          parseInt(seconds)
+        );
+
+        // Convert to UTC by getting the UTC timestamp
+        const utcTimestamp = Date.UTC(
+          localDate.getUTCFullYear(),
+          localDate.getUTCMonth(),
+          localDate.getUTCDate(),
+          localDate.getUTCHours(),
+          localDate.getUTCMinutes(),
+          localDate.getUTCSeconds()
+        );
+
+        // Create final UTC date
+        return new Date(utcTimestamp);
       }
 
       throw new Error(`Unrecognized date format: ${dateStr}`);
