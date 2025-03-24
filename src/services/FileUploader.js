@@ -863,6 +863,25 @@ export class FileUploader {
         return new Date(timestamp);
       }
 
+      // Handle ISO format (e.g., '2024-02-17 16:31:52')
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateStr)) {
+        const [datePart, timePart] = dateStr.split(' ');
+        const [year, month, day] = datePart.split('-');
+        const [hours, minutes, seconds] = timePart.split(':');
+        
+        // Create UTC date
+        const utcTimestamp = Date.UTC(
+          parseInt(year),
+          parseInt(month) - 1,
+          parseInt(day),
+          parseInt(hours),
+          parseInt(minutes),
+          parseInt(seconds)
+        );
+        
+        return new Date(utcTimestamp);
+      }
+
       // Handle date-time format (e.g., '11/1/2023 - 12:00:37') for other CSVs
       if (dateStr.includes(' - ')) {
         const [datePart, timePart] = dateStr.split(' - ');
@@ -880,6 +899,7 @@ export class FileUploader {
         const [hours, minutes, seconds] = timePart.split(':');
         
         // First create a local date object
+        // Hyperliquid CSVs are in the local timezone (if it's date string)
         const localDate = new Date(
           parseInt(year),
           parseInt(month) - 1,
