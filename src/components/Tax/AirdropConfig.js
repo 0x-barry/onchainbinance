@@ -6,12 +6,12 @@ import hlAnimatedGif from '../../images/hl-animated.gif';
 import StandardTable from '../UI/StandardTable';
 import WizardNavigation, { WizardButton, LeftArrowIcon, RightArrowIcon } from '../UI/WizardNavigation';
 
-const Container = styled.div`
+const StyledContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 1rem;
-  padding-bottom: 5rem; /* Add padding to account for the fixed navigation */
+  padding-bottom: 5rem;
   width: 100%;
   max-width: 1000px;
   margin: 0 auto;
@@ -20,7 +20,7 @@ const Container = styled.div`
   
   @media (min-width: 768px) {
     padding: 2rem;
-    padding-bottom: 5rem; /* Add padding to account for the fixed navigation */
+    padding-bottom: 5rem;
   }
 `;
 
@@ -31,18 +31,6 @@ const AnimatedLogo = styled.img`
   display: block;
   margin-left: auto;
   margin-right: auto;
-`;
-
-const Eyebrow = styled.h3`
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  font-family: ${props => props.theme.fonts.header};
-  width: 100%;
-
-  @media (min-width: 768px) {
-    font-size: 1.25rem;
-  }
 `;
 
 const Title = styled.h1`
@@ -68,7 +56,7 @@ const InfoTitle = styled.h3`
   margin-top: 0;
   margin-bottom: 0;
   font-family: ${props => props.theme.fonts.header};
-  font-size: 1.1rem; /* Smaller title */
+  font-size: 1.1rem;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -98,7 +86,7 @@ const InfoText = styled.p`
   color: ${props => props.theme.colors.text.secondary};
   margin-bottom: 0.75rem;
   line-height: 1.4;
-  font-size: 0.85rem; /* Smaller text */
+  font-size: 0.85rem;
 `;
 
 const InputContainer = styled.div`
@@ -133,7 +121,7 @@ const Select = styled.select`
   max-width: 150px;
 `;
 
-const Button = styled.button`
+const StyledButton = styled.button`
   background: ${props => props.theme.colors.primary};
   color: ${props => props.theme.colors.background};
   border: none;
@@ -194,12 +182,12 @@ const CustomTableHeader = ({ bulkMethod, setBulkMethod, applyBulkMethod }) => (
       <option value="firstTraded" disabled>First Traded Price</option>
       <option value="custom">Custom Value</option>
     </Select>
-    <Button 
+    <StyledButton 
       onClick={applyBulkMethod}
       style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem' }}
     >
       Apply
-    </Button>
+    </StyledButton>
   </BulkActionContainer>
 );
 
@@ -208,7 +196,6 @@ const AirdropConfig = () => {
   const [airdrops, setAirdrops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [tokenMap, setTokenMap] = useState({});
   const [sortConfig, setSortConfig] = useState({
     key: 'time',
     direction: 'desc'
@@ -221,19 +208,15 @@ const AirdropConfig = () => {
       try {
         setLoading(true);
         
-        // 1. Get the token mapping data
-        const tokenData = await FileUploader.getSpotTokenMap();
-        setTokenMap(tokenData.tokenAddressMap);
-        
-        // 2. Load deposits data from localStorage
+        // 1. Load deposits data from localStorage
         const depositsData = JSON.parse(localStorage.getItem('rawDepositsData') || '[]');
         
-        // 3. Filter for genesis.distribution entries
+        // 2. Filter for genesis.distribution entries
         const airdropEntries = depositsData.filter(entry => 
           entry.action === 'genesis.distribution'
         );
         
-        // 4. Transform to a more usable format for the form
+        // 3. Transform to a more usable format for the form
         const formattedAirdrops = airdropEntries.map(entry => {
           // Parse the timestamp using FileUploader's parseDate function
           const parsedDate = FileUploader.parseDate(entry.time);
@@ -496,15 +479,15 @@ const AirdropConfig = () => {
 
   if (loading) {
     return (
-      <Container>
+      <StyledContainer>
         <div>Loading airdrop data...</div>
-      </Container>
+      </StyledContainer>
     );
   }
 
   if (error) {
     return (
-      <Container>
+      <StyledContainer>
         <AnimatedLogo src={hlAnimatedGif} alt="Animated Logo" />
         <Title>Error</Title>
         <div>{error}</div>
@@ -518,13 +501,13 @@ const AirdropConfig = () => {
             Return to Upload
           </WizardButton>
         </WizardNavigation>
-      </Container>
+      </StyledContainer>
     );
   }
 
   if (airdrops.length === 0) {
     return (
-      <Container>
+      <StyledContainer>
         <AnimatedLogo src={hlAnimatedGif} alt="Animated Logo" />
         <Title>No Airdrops Detected</Title>
         
@@ -547,12 +530,12 @@ const AirdropConfig = () => {
             Continue to Summary
           </WizardButton>
         </WizardNavigation>
-      </Container>
+      </StyledContainer>
     );
   }
 
   return (
-    <Container>
+    <StyledContainer>
       <AnimatedLogo src={hlAnimatedGif} alt="Animated Logo" />
       <Title>Set Airdrop Value</Title>
       
@@ -622,7 +605,7 @@ const AirdropConfig = () => {
           Save and Continue
         </WizardButton>
       </WizardNavigation>
-    </Container>
+    </StyledContainer>
   );
 };
 

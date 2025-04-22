@@ -1,51 +1,15 @@
 import Papa from 'papaparse';
+import { TagMapper } from './TaxServiceConfig';
+import { getAssetWarningType, formatCurrencyForKoinly } from './KoinlyAssetSupport';
 
-/**
- * Koinly Tag Mapping Documentation
- * -------------------------------
- * This documents how we map different transaction types to Koinly tags (or lack thereof).
- * Some transactions intentionally have no tags as per Koinly's documentation.
- * 
- * Trade History CSV:
- * - Spot Trades (Buy/Sell): No tag required
- * - Perpetual Trades:
- *   • Opening Position: "Futures Fee" or "Fee Refund"
- *   • Closing Position: "Realized Gain"
- * 
- * Deposits and Withdrawals CSV:
- * - Regular Deposits: No tag required
- * - Regular Withdrawals: No tag required
- * - Internal Transfers (perp.spot.transfer, sub.account.transfer, spot.perp.transfer):
- *   • No tag required
- *   • TODO: Consider excluding these from the timeline
- *     to allow proper matching and zero net impact in Koinly
- * - Vault Operations:
- *   • Deposits (create.vault.capitalize, vault.deposit): "Add to Pool"
- *   • Withdrawals (vault.distribution, vault.withdrawal): "Remove from Pool"
- * - Genesis Distribution: "Airdrop"
- * 
- * Funding History CSV:
- * - All funding payments (positive or negative): "Funding Fee"
- * 
- * Staking Rewards CSV:
- * - Staking Rewards: "Reward"
- * - Open Interest Rewards: "Reward"
- * 
- * Staking Actions CSV:
- * - Delegate: "Add to Pool"
- * - Undelegate: "Remove from Pool"
- * - Transfers to/from staking:
- *   • No tag required
- *   • TODO: Consider excluding these from the timeline
- *     to allow proper matching in Koinly
- * 
- * UI Display:
- * - Internal transfers (both staking and regular) are visually identified 
- *   in the UI as "Internal Transfer" regardless of their Koinly tag
- */
+// Define tax services
+const TAX_SERVICES = {
+  KOINLY: 'koinly',
+  AWAKEN: 'awaken'
+};
 
 export class FileUploader {
-  // Main Public Interface
+
   static async parseCSVFile(file) {
     return new Promise((resolve, reject) => {
       if (!file || !(file instanceof File)) {
@@ -95,16 +59,15 @@ export class FileUploader {
           const hasTimeField = results.meta.fields?.includes('time');
           
           if (hasTimeField && results.data.length > 0) {
-            // Get date samples - up to 20 samples
+            // Get all date samples for analysis
             const dateSamples = results.data
-              .slice(0, Math.min(20, results.data.length))
               .map(row => row.time)
               .filter(Boolean);
             
             if (dateSamples.length > 0) {
-              // Detect and store the date format
+              // Detect and store the date format using full batch processing
               this.dateFormat = this.detectDateFormat(dateSamples);
-              console.log(`Detected date format: ${this.dateFormat}`);
+              console.log(`Detected date format for ${file.name}: ${this.dateFormat}`);
             }
           }
           
@@ -164,20 +127,36 @@ export class FileUploader {
       // First pass: identify all problematic assets
       timeline.forEach(event => {
         const currencies = [
-          event.display.sentCurrency,
-          event.display.receivedCurrency,
-          event.display.feeCurrency
+          event.data?.sentCurrency,
+          event.data?.receivedCurrency,
+          event.data?.feeCurrency
         ].filter(Boolean);
+        
+        console.log('Processing event currencies:', {
+          eventType: event.eventType,
+          currencies,
+          time: event.time
+        });
         
         currencies.forEach(currency => {
           const warningType = getAssetWarningType(currency);
+          console.log('Asset warning type:', {
+            currency,
+            warningType
+          });
           if (warningType === 'soft') problematicAssets.soft.add(currency);
           if (warningType === 'hard') problematicAssets.hard.add(currency);
         });
       });
 
+      console.log('Identified problematic assets:', {
+        soft: Array.from(problematicAssets.soft),
+        hard: Array.from(problematicAssets.hard)
+      });
+
       // Create NULL mappings for hard warning assets
       const nullMappings = this.createNullMappings(Array.from(problematicAssets.hard));
+      console.log('Created NULL mappings:', nullMappings);
 
       // Define CSV headers
       const headers = [
@@ -202,23 +181,38 @@ export class FileUploader {
       const unsupportedRows = timeline
         .filter(event => {
           const currencies = [
-            event.display.sentCurrency,
-            event.display.receivedCurrency,
-            event.display.feeCurrency
+            event.data?.sentCurrency,
+            event.data?.receivedCurrency,
+            event.data?.feeCurrency
           ].filter(Boolean);
           
-          return currencies.some(currency => 
+          const hasHardWarning = currencies.some(currency => 
             getAssetWarningType(currency) === 'hard'
           );
+          
+          console.log('Checking event for hard warnings:', {
+            eventType: event.eventType,
+            time: event.time,
+            currencies,
+            hasHardWarning
+          });
+          
+          return hasHardWarning;
         })
         .map(event => this.createUnsupportedKoinlyRow(event, nullMappings));
+
+      console.log('Unsupported rows count:', unsupportedRows.length);
+      console.log('Sample of unsupported rows:', unsupportedRows.slice(0, 2));
 
       // Download the main CSV
       this.downloadCSV(headers, mainRows, 'hyperliquid_transactions_koinly.csv');
       
       // Download the unsupported assets CSV if there are any rows
       if (unsupportedRows.length > 0) {
+        console.log('Downloading unsupported assets CSV with', unsupportedRows.length, 'rows');
         this.downloadCSV(headers, unsupportedRows, 'hyperliquid_transactions_koinly_unsupported_assets.csv');
+      } else {
+        console.log('No unsupported assets found, skipping unsupported assets CSV download');
       }
       
       // Store problematic assets in localStorage for the follow-up guide
@@ -262,16 +256,16 @@ export class FileUploader {
     
     return [
       event.time,
-      event.koinly.sentAmount,
-      formatCurrencyForKoinly(event.koinly.sentCurrency),
-      event.koinly.receivedAmount,
-      formatCurrencyForKoinly(event.koinly.receivedCurrency),
-      event.koinly.feeAmount,
-      formatCurrencyForKoinly(event.koinly.feeCurrency),
-      event.koinly.netWorthAmount || '',
-      event.koinly.netWorthCurrency || '',
-      event.koinly.tag,
-      event.koinly.description,
+      event.data.sentAmount,
+      formatCurrencyForKoinly(event.data.sentCurrency),
+      event.data.receivedAmount,
+      formatCurrencyForKoinly(event.data.receivedCurrency),
+      event.data.feeAmount,
+      formatCurrencyForKoinly(event.data.feeCurrency),
+      event.data.netWorthAmount || '',
+      event.data.netWorthCurrency || '',
+      event.data.tag,
+      event.data.description,
       '' // TxHash
     ].map(cell => {
       if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
@@ -285,25 +279,25 @@ export class FileUploader {
     const { getAssetWarningType, formatCurrencyForKoinly } = require('./KoinlyAssetSupport');
     
     // Format currency, using NULL prefix for hard warning assets
-    const formatCurrency = (displayCurrency, koinlyCurrency) => {
-      if (!displayCurrency) return '';
-      return getAssetWarningType(displayCurrency) === 'hard' 
-        ? nullMappings[displayCurrency]
-        : formatCurrencyForKoinly(koinlyCurrency);
+    const formatCurrency = (currency) => {
+      if (!currency) return '';
+      return getAssetWarningType(currency) === 'hard' 
+        ? nullMappings[currency]
+        : formatCurrencyForKoinly(currency);
     };
     
     return [
       event.time,
-      event.koinly.sentAmount,
-      formatCurrency(event.display.sentCurrency, event.koinly.sentCurrency),
-      event.koinly.receivedAmount,
-      formatCurrency(event.display.receivedCurrency, event.koinly.receivedCurrency),
-      event.koinly.feeAmount,
-      formatCurrency(event.display.feeCurrency, event.koinly.feeCurrency),
-      event.koinly.netWorthAmount || '',
-      event.koinly.netWorthCurrency || '',
-      event.koinly.tag,
-      event.koinly.description,
+      event.data.sentAmount,
+      formatCurrency(event.data.sentCurrency),
+      event.data.receivedAmount,
+      formatCurrency(event.data.receivedCurrency),
+      event.data.feeAmount,
+      formatCurrency(event.data.feeCurrency),
+      event.data.netWorthAmount || '',
+      event.data.netWorthCurrency || '',
+      event.data.tag,
+      event.data.description,
       '' // TxHash
     ].map(cell => {
       if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
@@ -356,126 +350,84 @@ export class FileUploader {
       const notional = parseFloat(trade.ntl);
       
       const coin = this.normalizeCoinName(trade.coin, tokenData);
-      const coinAddress = tokenData.tokenAddressMap[coin] || coin;
       const usdc = 'USDC';
-      const usdcAddress = tokenData.tokenAddressMap[usdc] || usdc;
-    
-      let tag = '';
-      let sentAmount = '';
-      let sentCurrency = '';
-      let sentCurrencyDisplay = '';
-      let receivedAmount = '';
-      let receivedCurrency = '';
-      let receivedCurrencyDisplay = '';
-      let feeAmount = '';
-      let feeCurrency = '';
-      let feeCurrencyDisplay = '';
-      let description = isSpotDustConversion 
-        ? `Spot dust conversion of ${size} ${coin} to ${pnl} USDC`
-        : `${isSpot ? (isBuyOrOpen ? 'Buy' : 'Sell') : (isBuyOrOpen ? 'Open' : 'Close')} ${size} ${coin} at ${price} USDC per ${coin}`;
-      const eventLabel = isSpot 
-        ? `${isBuyOrOpen ? 'Buy' : 'Sell'} ${coin}`
-        : `${isBuyOrOpen ? 'Open' : 'Close'} ${coin} ${direction.includes('long') ? 'Long' : 'Short'}`;
+      
+      let data = {
+        sentAmount: '',
+        sentCurrency: '',
+        receivedAmount: '',
+        receivedCurrency: '',
+        feeAmount: '',
+        feeCurrency: '',
+        netWorthAmount: '',
+        netWorthCurrency: '',
+        tag: '',
+        description: isSpotDustConversion 
+          ? `Spot dust conversion of ${size} ${coin} to ${pnl} USDC`
+          : `${isSpot ? (isBuyOrOpen ? 'Buy' : 'Sell') : (isBuyOrOpen ? 'Open' : 'Close')} ${size} ${coin} at ${price} USDC per ${coin}`,
+        eventLabel: isSpot 
+          ? `${isBuyOrOpen ? 'Buy' : 'Sell'} ${coin}`
+          : `${isBuyOrOpen ? 'Open' : 'Close'} ${coin} ${direction.includes('long') ? 'Long' : 'Short'}`,
+        internalTag: isSpot ? 'trade:spot' : (
+          isBuyOrOpen ? (
+            fee > 0 ? 'trade:perp:open:fee' : 'trade:perp:open:rebate'
+          ) : 'trade:perp:close'
+        ),
+        pnl: pnl || undefined
+      };
       
       // Spot trade logic
       if (isSpot) {
         if (isBuyOrOpen) {
-          sentAmount = notional.toString();
-          sentCurrency = usdcAddress;
-          sentCurrencyDisplay = usdc;
-          receivedAmount = size.toString();
-          receivedCurrency = coinAddress;
-          receivedCurrencyDisplay = coin;
-          feeAmount = fee.toString(); // Fee is in coin for spot buys
-          feeCurrency = coinAddress;
-          feeCurrencyDisplay = coin;
+          data.sentAmount = notional.toString();
+          data.sentCurrency = usdc;
+          data.receivedAmount = size.toString();
+          data.receivedCurrency = coin;
+          data.feeAmount = fee.toString(); // Fee is in coin for spot buys
+          data.feeCurrency = coin;
         } else if (isSpotDustConversion) {
-          sentAmount = size.toString();
-          sentCurrency = coinAddress;
-          sentCurrencyDisplay = coin;
-          receivedAmount = pnl.toString(); // Likely 0 if spot was just burned
-          receivedCurrency = usdcAddress;
-          receivedCurrencyDisplay = usdc;
-          feeAmount = '';
-          feeCurrency = '';
-          feeCurrencyDisplay = '';
+          data.sentAmount = size.toString();
+          data.sentCurrency = coin;
+          data.receivedAmount = pnl.toString(); // Likely 0 if spot was just burned
+          data.receivedCurrency = usdc;
         } else {
-          sentAmount = size.toString();
-          sentCurrency = coinAddress;
-          sentCurrencyDisplay = coin;
-          receivedAmount = notional.toString();
-          receivedCurrency = usdcAddress;
-          receivedCurrencyDisplay = usdc;
-          feeAmount = fee.toString(); // Fee is in USDC for spot sells
-          feeCurrency = usdcAddress;
-          feeCurrencyDisplay = usdc;
+          data.sentAmount = size.toString();
+          data.sentCurrency = coin;
+          data.receivedAmount = notional.toString();
+          data.receivedCurrency = usdc;
+          data.feeAmount = fee.toString(); // Fee is in USDC for spot sells
+          data.feeCurrency = usdc;
         }
-        // Perp`trade logic
+      // Perp trade logic
       } else {
         if (isBuyOrOpen) {
           if (fee < 0) {
             // Fee rebate
-            tag = 'Realized Gain';
-            receivedAmount = Math.abs(fee).toString();
-            receivedCurrency = usdcAddress;
-            receivedCurrencyDisplay = usdc;
+            data.receivedAmount = Math.abs(fee).toString();
+            data.receivedCurrency = usdc;
           } else if (fee > 0) {
             // Regular fee
-            tag = 'Futures Fee';
-            sentAmount = fee.toString();
-            sentCurrency = usdcAddress;
-            sentCurrencyDisplay = usdc;
+            data.sentAmount = fee.toString();
+            data.sentCurrency = usdc;
           }
         } else {
           // Closing a position - handle PnL
           if (pnl > 0) {
-            tag = 'Realized Gain';
-            receivedAmount = pnl.toString();
-            receivedCurrency = usdcAddress;
-            receivedCurrencyDisplay = usdc;
+            data.receivedAmount = pnl.toString();
+            data.receivedCurrency = usdc;
           } else if (pnl < 0) {
-            tag = 'Realized Gain';
-            sentAmount = Math.abs(pnl).toString();
-            sentCurrency = usdcAddress;
-            sentCurrencyDisplay = usdc;
+            data.sentAmount = Math.abs(pnl).toString();
+            data.sentCurrency = usdc;
           }
-          
         }
       }
       
       return {
         time: this.parseDate(trade.time).toISOString(),
         eventType: 'trade',
-        type: isSpot ? 'spot' : 'perp', // Keep type for filtering
-        
-        koinly: {
-          sentAmount,
-          sentCurrency,
-          receivedAmount,
-          receivedCurrency,
-          feeAmount,
-          feeCurrency,
-          tag,
-          description
-        },
-        
-        display: {
-          sentAmount,
-          sentCurrency: sentCurrencyDisplay,
-          receivedAmount,
-          receivedCurrency: receivedCurrencyDisplay,
-          feeAmount,
-          feeCurrency: feeCurrencyDisplay,
-          eventLabel,
-          description,
-          pnl
-        },
-        
-        details: {
-          trade: {
-            ...trade,  // Include all original fields
-          }
-        }
+        type: isSpot ? 'spot' : 'perp',
+        data,
+        original: trade
       };
     });
   }
@@ -490,51 +442,27 @@ export class FileUploader {
       const rate = parseFloat(payment.rate);
       const coin = payment.coin;
       const usdc = 'USDC';
-      const usdcAddress = tokenAddressMap[usdc] || usdc;
       
-      const sentAmount = amount < 0 ? Math.abs(amount).toString() : '';
-      const sentCurrency = amount < 0 ? usdcAddress : '';
-      const sentCurrencyDisplay = usdc;
-      const receivedAmount = amount > 0 ? amount.toString() : '';
-      const receivedCurrency = amount > 0 ? usdcAddress : '';
-      const receivedCurrencyDisplay = usdc;
-      const feeAmount = '';
-      const feeCurrency = '';
-      const tag = 'Funding Fee';
-      const eventLabel = 'Funding Fee';
-      const description = `Funding payment for ${coin} position at rate ${rate}`;
+      const data = {
+        sentAmount: amount < 0 ? Math.abs(amount).toString() : '',
+        sentCurrency: amount < 0 ? usdc : '',
+        receivedAmount: amount > 0 ? amount.toString() : '',
+        receivedCurrency: amount > 0 ? usdc : '',
+        feeAmount: '',
+        feeCurrency: '',
+        netWorthAmount: '',
+        netWorthCurrency: '',
+        tag: '',
+        description: `Funding payment for ${coin} position at rate ${rate}`,
+        eventLabel: 'Funding Fee',
+        internalTag: 'funding'
+      };
 
       return {
         time: this.parseDate(payment.time).toISOString(),
         eventType: 'funding',
-        
-        koinly: {
-          sentAmount,
-          sentCurrency,
-          receivedAmount,
-          receivedCurrency,
-          feeAmount,
-          feeCurrency,
-          tag,
-          description
-        },
-        
-        display: {
-          sentAmount,
-          sentCurrency: sentCurrencyDisplay,
-          receivedAmount,
-          receivedCurrency: receivedCurrencyDisplay,
-          feeAmount,
-          feeCurrency,
-          eventLabel,
-          description
-        },
-        
-        details: {
-          funding: {
-            ...payment
-          }
-        }
+        data,
+        original: payment
       };
     });
   }
@@ -544,122 +472,109 @@ export class FileUploader {
       throw new Error('Invalid deposits data format');
     }
 
-    // TODO: For internal transfers (perp.spot.transfer, sub.account.transfer, spot.perp.transfer),
-    // consider splitting these into separate transactions (send/receive) to allow proper matching
-    // and zero net impact in Koinly
-
     return deposits.map(deposit => {
       const [amountStr, coin] = deposit.accountValueChange.split(' ');
-      // Use Math.abs to ensure no negative values
       const amount = Math.abs(parseFloat(amountStr));
       const fee = Math.abs(parseFloat(deposit.fee || 0));
       const action = deposit.action.toLowerCase();
-      const coinAddress = tokenAddressMap[coin] || coin;
+      const isPositive = parseFloat(amountStr) > 0;
+      const isReceived = ['deposit', 'receive.spot', 'receive.usdc.perps.wallet', 'vault.distribution', 'vault.withdrawal','open.interest.reward', 'genesis.distribution','spot.perp.transfer','evm.to.spot.transfer'].includes(action) || 
+                        (action === 'sub.account.transfer' && isPositive);
+      const isInternalTransfer = ['perp.spot.transfer', 'spot.perp.transfer'].includes(action);
       
-      const isReceived = ['deposit', 'receive.spot', 'receive.usdc.perps.wallet', 'vault.distribution', 'vault.withdrawal','open.interest.reward', 'genesis.distribution','spot.perp.transfer'].includes(action);
-      const isInternalTransfer = ['perp.spot.transfer', 'sub.account.transfer', 'spot.perp.transfer'].includes(action);
-      
-      const feeAmount = fee > 0 ? fee.toString() : '';
-      const feeCurrency = fee > 0 ? coinAddress : '';
-      const feeCurrencyDisplay = fee > 0 ? coin : '';
-
-      const sentAmount = !isReceived ? amount.toString() : '';
-      const sentCurrency = !isReceived ? coinAddress : '';
-      const sentCurrencyDisplay = !isReceived ? coin : '';
-
-      const receivedAmount = isReceived ? amount.toString() : '';
-      const receivedCurrency = isReceived ? coinAddress : '';
-      const receivedCurrencyDisplay = isReceived ? coin : '';
-
-      // Get netWorthAmount and netWorthCurrency from the deposit if they exist
-      const netWorthAmount = deposit.netWorthAmount || '';
-      const netWorthCurrency = deposit.netWorthCurrency || '';
-
       let eventLabel = '';
-      let tag = '';
       let description = '';
+      let internalTag = '';
+
       if (action === 'deposit') {
         eventLabel = 'Bridge In';
         description = `Bridged in ${amount} ${coin}`;
+        internalTag = 'transfer:deposit';
       } else if (action === 'withdrawal') {
         eventLabel = 'Bridge Out';
         description = `Bridged out ${amount} ${coin}`;
+        internalTag = 'transfer:withdrawal';
       } else if (action === 'receive.spot') {
         eventLabel = coin === 'USDC' ? 'Receive USDC' : 'Receive Tokens';
         description = `Received ${amount} ${coin}`;
+        internalTag = 'transfer:deposit:external';
       } else if (action === 'receive.usdc.perps.wallet') {
         eventLabel = 'Receive USDC';
         description = `Received ${amount} ${coin}`;
+        internalTag = 'transfer:deposit:external';
       } else if (action === 'send.spot') {
         eventLabel = coin === 'USDC' ? 'Send USDC' : 'Send Tokens';
         description = `Sent ${amount} ${coin}`;
+        internalTag = 'transfer:withdrawal:external';
       } else if (action === 'send.usdc.perps.wallet') {
         eventLabel = 'Send USDC';
         description = `Sent ${amount} ${coin}`;
+        internalTag = 'transfer:withdrawal:external';
       } else if (['create.vault.capitalize', 'vault.deposit'].includes(action)) {
         eventLabel = 'Vault Deposit';
         description = `Deposited ${amount} ${coin} to unspecified vault [VAULT DEPOSIT]`;
+        internalTag = 'transfer:vault:deposit';
       } else if (['vault.distribution', 'vault.withdrawal'].includes(action)) {
         eventLabel = 'Vault Withdrawal';
         description = `Withdrew ${amount} ${coin} from unspecified vault [VAULT WITHDRAWAL]`;
+        internalTag = 'transfer:vault:withdrawal';
       } else if (action === 'perp.spot.transfer') {
-        eventLabel = 'Intrawallet Transfer';
+        eventLabel = 'Perp to Spot Transfer';
         description = `Transferred ${amount} ${coin} from Perpetual to Spot account [INTRAWALLET TRANSFER]`;
+        internalTag = 'transfer:internal:perp_to_spot';
       } else if (action === 'sub.account.transfer') {
-        eventLabel = 'Intrawallet Transfer';
-        description = `Transferred ${amount} ${coin} between Subaccounts [INTRAWALLET TRANSFER]`;
+        eventLabel = isPositive ? 'Receive from Subaccount' : 'Send to Subaccount';
+        description = isPositive 
+          ? `Received ${amount} ${coin} from subaccount [SUBACCOUNT MUST BE ADDED AS SEPARATE WALLET]`
+          : `Sent ${amount} ${coin} to subaccount [SUBACCOUNT MUST BE ADDED AS SEPARATE WALLET]`;
+        internalTag = isPositive ? 'transfer:deposit:subaccount' : 'transfer:withdrawal:subaccount';
       } else if (action === 'spot.perp.transfer') {
-        eventLabel = 'Intrawallet Transfer';
+        eventLabel = 'Spot to Perp Transfer';
         description = `Transferred ${amount} ${coin} from Spot to Perpetual account [INTRAWALLET TRANSFER]`;
+        internalTag = 'transfer:internal:spot_to_perp';
       } else if (action === 'open.interest.reward') {
         eventLabel = 'Open Interest Reward';
-        tag = 'Reward';
         description = `Received ${amount} ${coin} open interest reward`;
+        internalTag = 'transfer:open_interest_reward';
       } else if (action === 'genesis.distribution') {
         eventLabel = `${coin} Airdrop`;
-        tag = 'Airdrop';
         description = `Received ${amount} ${coin} airdrop`;
+        internalTag = 'transfer:airdrop';
+      } else if (action === 'spot.to.evm.transfer') {
+        eventLabel = 'Spot to EVM Transfer';
+        description = `Transferred ${amount} ${coin} from Spot to EVM account`;
+        internalTag = 'transfer:withdrawal:spot_to_evm';
+      } else if (action === 'evm.to.spot.transfer') {
+        eventLabel = 'EVM to Spot Transfer';
+        description = `Transferred ${amount} ${coin} from EVM to Spot account`;
+        internalTag = 'transfer:deposit:evm_to_spot';
       } else {
         eventLabel = 'Transfer';
         description = `Transferred ${amount} ${coin}`;
+        internalTag = 'transfer:internal:unknown';
       }
-      
+
+      const data = {
+        sentAmount: !isReceived ? amount.toString() : '',
+        sentCurrency: !isReceived ? coin : '',
+        receivedAmount: isReceived ? amount.toString() : '',
+        receivedCurrency: isReceived ? coin : '',
+        feeAmount: fee > 0 ? fee.toString() : '',
+        feeCurrency: fee > 0 ? coin : '',
+        netWorthAmount: deposit.netWorthAmount || '',
+        netWorthCurrency: deposit.netWorthCurrency || '',
+        tag: '',
+        description,
+        eventLabel,
+        internalTag
+      };
+
       return {
         time: this.parseDate(deposit.time).toISOString(),
         eventType: 'transfer',
         isInternalTransfer,
-        
-        koinly: {
-          sentAmount,
-          sentCurrency,
-          receivedAmount,
-          receivedCurrency,
-          feeAmount,
-          feeCurrency,
-          netWorthAmount,
-          netWorthCurrency,
-          tag,
-          description
-        },
-        
-        display: {
-          sentAmount,
-          sentCurrency: sentCurrencyDisplay,
-          receivedAmount,
-          receivedCurrency: receivedCurrencyDisplay,
-          feeAmount,
-          feeCurrency: feeCurrencyDisplay,
-          netWorthAmount,
-          netWorthCurrency,
-          eventLabel, 
-          description
-        },
-        
-        details: {
-          transfer: {
-            ...deposit,
-          }
-        }
+        data,
+        original: deposit
       };
     });
   }
@@ -669,87 +584,59 @@ export class FileUploader {
       throw new Error('Invalid staking rewards data format');
     }
 
-    // Create a flattened array with two transactions for each reward
     return stakingRewards.flatMap(reward => {
       const amount = parseFloat(reward.amount);
       const coin = 'HYPE';
-      const coinAddress = tokenAddressMap[coin] || coin;
       const rewardTime = this.parseDate(reward.time);
       
       // First transaction: Receive the reward
+      const rewardData = {
+        sentAmount: '',
+        sentCurrency: '',
+        receivedAmount: amount.toString(),
+        receivedCurrency: coin,
+        feeAmount: '',
+        feeCurrency: '',
+        netWorthAmount: '',
+        netWorthCurrency: '',
+        tag: '',
+        description: `Staking reward of ${amount} ${coin}`,
+        eventLabel: 'Staking Reward',
+        internalTag: 'staking:reward'
+      };
+      
       const rewardTransaction = {
         time: rewardTime.toISOString(),
         eventType: 'stakingReward',
-        
-        koinly: {
-          sentAmount: '',
-          sentCurrency: '',
-          receivedAmount: amount.toString(),
-          receivedCurrency: coinAddress,
-          feeAmount: '',
-          feeCurrency: '',
-          tag: 'Reward',
-          description: `Staking reward of ${amount} ${coin}`
-        },
-        
-        display: {
-          sentAmount: '',
-          sentCurrency: '',
-          receivedAmount: amount.toString(),
-          receivedCurrency: coin,
-          feeAmount: '',
-          feeCurrency: '',
-          eventLabel: 'Staking Reward',
-          description: `Staking reward of ${amount} ${coin}`
-        },
-        
-        details: {
-          staking: {
-            amount,
-            source: reward.source || 'unknown'
-          }
-        }
+        data: rewardData,
+        original: reward
       };
       
       // Second transaction: Auto-stake the reward (1 second later)
       const autoStakeTime = new Date(rewardTime.getTime() + 1000); // Add 1 second
+      const autoStakeData = {
+        sentAmount: amount.toString(),
+        sentCurrency: coin,
+        receivedAmount: '',
+        receivedCurrency: '',
+        feeAmount: '',
+        feeCurrency: '',
+        netWorthAmount: '',
+        netWorthCurrency: '',
+        tag: '',
+        description: `Manual txn to account for auto-staking of ${amount} ${coin} reward [STAKE/DELEGATE]`,
+        eventLabel: 'Auto-Stake Reward',
+        internalTag: 'staking:delegate'
+      };
+      
       const autoStakeTransaction = {
         time: autoStakeTime.toISOString(),
         eventType: 'stakingAction',
         isInternalTransfer: false,
-        
-        koinly: {
-          sentAmount: amount.toString(),
-          sentCurrency: coinAddress,
-          receivedAmount: '',
-          receivedCurrency: '',
-          feeAmount: '',
-          feeCurrency: '',
-          tag: 'Add to Pool',
-          description: `Manual txn to account for auto-staking of ${amount} ${coin} reward [STAKE/DELEGATE]`
-        },
-        
-        display: {
-          sentAmount: amount.toString(),
-          sentCurrency: coin,
-          receivedAmount: '',
-          receivedCurrency: '',
-          feeAmount: '',
-          feeCurrency: '',
-          eventLabel: 'Auto-Stake Reward',
-          description: `Manual txn to account for auto-staking of ${amount} ${coin} reward [STAKE/DELEGATE]`
-        },
-        
-        details: {
-          staking: {
-            amount,
-            source: 'auto-stake',
-            originalReward: reward
-          }
-        }
+        data: autoStakeData,
+        original: { ...reward, source: 'auto-stake' }
       };
       
-      // Return both transactions
       return [rewardTransaction, autoStakeTransaction];
     });
   }
@@ -759,75 +646,55 @@ export class FileUploader {
       throw new Error('Invalid staking actions data format');
     }
 
-    // TODO: For staking transfers (deposit/withdrawal), consider splitting these into
-    // separate transactions (send/receive) to allow proper matching in Koinly
-
     return stakingActions.map(action => {
       const amount = parseFloat(action.amount);
       const coin = 'HYPE';
-      const coinAddress = tokenAddressMap[coin] || coin;
       const actionType = action.action.toLowerCase();
       const isInternalTransfer = ['deposit', 'withdrawal'].includes(actionType);
 
-      const sentAmount = ['deposit', 'delegate'].includes(actionType) ? amount.toString() : '';
-      const sentCurrency = ['deposit', 'delegate'].includes(actionType) ? coinAddress : '';
-      const sentCurrencyDisplay = ['deposit', 'delegate'].includes(actionType) ? coin : '';
-      const receivedAmount = ['withdrawal', 'undelegate'].includes(actionType) ? amount.toString() : '';
-      const receivedCurrency = ['withdrawal', 'undelegate'].includes(actionType) ? coinAddress : '';
-      const receivedCurrencyDisplay = ['withdrawal', 'undelegate'].includes(actionType) ? coin : '';
-      const feeAmount = '';
-      const feeCurrency = '';
-      
-      // Get event label using logic from getEventLabel
       let eventLabel = '';
-      let tag = '';
       let description = '';
+      let internalTag = '';
+      
       if (actionType === 'delegate') {
         eventLabel = 'Stake HYPE';
         description = `Staked ${amount} ${coin} [STAKE/DELEGATE]`;
+        internalTag = 'staking:delegate';
       } else if (actionType === 'undelegate') {
         eventLabel = 'Unstake HYPE';
         description = `Unstaked ${amount} ${coin} [UNSTAKE/UNDELEGATE]  `;
+        internalTag = 'staking:undelegate';
       } else if (actionType === 'deposit') {
         eventLabel = 'Transfer Spot to Staking';
         description = `Transferred ${amount} ${coin} from Spot to Staking [INTRAWALLET TRANSFER]`;
+        internalTag = 'staking:transfer:spot_to_staking';
       } else if (actionType === 'withdrawal') {
         eventLabel = 'Transfer Staking to Spot';
         description = `Transferred ${amount} ${coin} from Staking to Spot [INTRAWALLET TRANSFER]`;
+        internalTag = 'staking:transfer:staking_to_spot';
       }
+
+      const data = {
+        sentAmount: ['deposit', 'delegate'].includes(actionType) ? amount.toString() : '',
+        sentCurrency: ['deposit', 'delegate'].includes(actionType) ? coin : '',
+        receivedAmount: ['withdrawal', 'undelegate'].includes(actionType) ? amount.toString() : '',
+        receivedCurrency: ['withdrawal', 'undelegate'].includes(actionType) ? coin : '',
+        feeAmount: '',
+        feeCurrency: '',
+        netWorthAmount: '',
+        netWorthCurrency: '',
+        tag: '',
+        description,
+        eventLabel,
+        internalTag
+      };
       
       return {
         time: this.parseDate(action.time).toISOString(),
         eventType: 'stakingAction',
         isInternalTransfer,
-        
-        koinly: {
-          sentAmount,
-          sentCurrency,
-          receivedAmount,
-          receivedCurrency,
-          feeAmount,
-          feeCurrency,
-          tag,
-          description
-        },
-        
-        display: {
-          sentAmount,
-          sentCurrency: sentCurrencyDisplay,
-          receivedAmount,
-          receivedCurrency: receivedCurrencyDisplay,
-          feeAmount,
-          feeCurrency,
-          eventLabel,
-          description
-        },
-        
-        details: {
-          staking: {
-            ...action,
-          }
-        }
+        data,
+        original: action
       };
     });
   }
@@ -853,6 +720,11 @@ export class FileUploader {
       // Handle null/undefined/empty values
       if (!dateStr) {
         throw new Error('Invalid date: received empty value');
+      }
+
+      // Handle ISO 8601 format (e.g., '2023-08-16T20:46:50.000Z')
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(dateStr)) {
+        return new Date(dateStr);
       }
 
       // Handle timestamp format (e.g., '1740950869326') for staking CSVs
@@ -936,19 +808,101 @@ export class FileUploader {
    * @returns {string} - 'MM/DD/YYYY' or 'DD/MM/YYYY'
    */
   static detectDateFormat(dateSamples) {
-    // Initialize counters for each format
+    // Constants
+    const MAX_SAMPLES = 1000;
+    const CONFIDENCE_THRESHOLD = 0.7;
+    const METHOD_WEIGHTS = {
+      unambiguous: 0.7,
+      rangeValidation: 0.2,
+      consistency: 0.1
+    };
+
+    // First, scan all dates for unambiguous format indicators
+    const quickScanResults = this.analyzeUnambiguousDates(dateSamples);
+    console.log('Quick scan for unambiguous dates:', quickScanResults);
+    
+    // If we found unambiguous dates, use them to determine the format
+    if (quickScanResults.mmdd > 0 || quickScanResults.ddmm > 0) {
+      if (quickScanResults.ddmm > quickScanResults.mmdd) {
+        console.log('Detected DD/MM/YYYY format based on unambiguous dates');
+        return 'DD/MM/YYYY';
+      } else if (quickScanResults.mmdd > quickScanResults.ddmm) {
+        console.log('Detected MM/DD/YYYY format based on unambiguous dates');
+        return 'MM/DD/YYYY';
+      }
+    }
+
+    // If no unambiguous dates found, proceed with detailed analysis
+    console.log('No unambiguous dates found, proceeding with detailed analysis');
+    
+    // Initialize scores
+    let mmddScore = 0;
+    let ddmmScore = 0;
+    
+    // Process dates in batches if needed
+    let processedSamples = 0;
+    let currentBatch = dateSamples.slice(0, Math.min(100, dateSamples.length));
+    
+    while (currentBatch.length > 0 && processedSamples < MAX_SAMPLES) {
+      // Method 2: Date Range Validation
+      const rangeResults = this.validateDateRanges(currentBatch);
+      mmddScore += rangeResults.mmdd * METHOD_WEIGHTS.rangeValidation;
+      ddmmScore += rangeResults.ddmm * METHOD_WEIGHTS.rangeValidation;
+      
+      // Method 3: Consistency Analysis
+      const consistencyResults = this.analyzeDateConsistency(currentBatch);
+      mmddScore += consistencyResults.mmdd * METHOD_WEIGHTS.consistency;
+      ddmmScore += consistencyResults.ddmm * METHOD_WEIGHTS.consistency;
+      
+      // Log the analysis for debugging
+      console.log('Date format detection analysis:', {
+        batchSize: currentBatch.length,
+        rangeResults,
+        consistencyResults,
+        currentScores: { mmddScore, ddmmScore }
+      });
+      
+      // Check if we have enough confidence
+      const totalScore = mmddScore + ddmmScore;
+      if (totalScore > 0) {
+        const mmddConfidence = mmddScore / totalScore;
+        const ddmmConfidence = ddmmScore / totalScore;
+        
+        if (mmddConfidence >= CONFIDENCE_THRESHOLD) {
+          console.log('Detected MM/DD/YYYY format with confidence:', mmddConfidence);
+          return 'MM/DD/YYYY';
+        }
+        if (ddmmConfidence >= CONFIDENCE_THRESHOLD) {
+          console.log('Detected DD/MM/YYYY format with confidence:', ddmmConfidence);
+          return 'DD/MM/YYYY';
+        }
+      }
+      
+      // Get next batch if needed
+      processedSamples += currentBatch.length;
+      if (processedSamples < dateSamples.length && processedSamples < MAX_SAMPLES) {
+        const nextBatchSize = Math.min(100, dateSamples.length - processedSamples);
+        currentBatch = dateSamples.slice(processedSamples, processedSamples + nextBatchSize);
+      } else {
+        break;
+      }
+    }
+    
+    // If we couldn't determine with confidence, use default format
+    console.log('Using default MM/DD/YYYY format');
+    return 'MM/DD/YYYY';
+  }
+
+  /**
+   * Analyzes dates for unambiguous format indicators
+   * @param {Array<string>} dates - Array of date strings
+   * @returns {Object} - Counts of unambiguous MM/DD and DD/MM dates
+   */
+  static analyzeUnambiguousDates(dates) {
     let mmddCount = 0;
     let ddmmCount = 0;
     
-    // Process each date in the sample
-    for (const fullDateStr of dateSamples) {
-      // Extract just the date part if it's in the format with time
-      let dateStr = fullDateStr;
-      if (fullDateStr.includes(' - ')) {
-        dateStr = fullDateStr.split(' - ')[0];
-      }
-      
-      // Skip if not in expected format with slashes
+    for (const dateStr of dates) {
       if (!dateStr.includes('/')) continue;
       
       const parts = dateStr.split('/');
@@ -957,29 +911,125 @@ export class FileUploader {
       const num1 = parseInt(parts[0], 10);
       const num2 = parseInt(parts[1], 10);
       
-      // Check for unambiguous date formats
       if (num1 > 12 && num2 <= 12) {
-        // First number > 12, must be DD/MM format
         ddmmCount++;
       } else if (num1 <= 12 && num2 > 12) {
-        // Second number > 12, must be MM/DD format
         mmddCount++;
       }
-      // Ambiguous dates don't contribute to either count
     }
     
-    console.log(`Date format detection results: MM/DD count: ${mmddCount}, DD/MM count: ${ddmmCount}`);
+    return { mmdd: mmddCount, ddmm: ddmmCount };
+  }
+
+  /**
+   * Validates dates against calendar rules to determine format
+   * @param {Array<string>} dates - Array of date strings
+   * @returns {Object} - Scores for MM/DD and DD/MM formats
+   */
+  static validateDateRanges(dates) {
+    let mmddValid = 0;
+    let ddmmValid = 0;
     
-    // Determine format based on which has more unambiguous examples
-    if (ddmmCount > mmddCount) {
-      return 'DD/MM/YYYY';
-    } else if (mmddCount > ddmmCount) {
-      return 'MM/DD/YYYY';
-    } else {
-      // If tied or no unambiguous dates found, return default
-      console.log('Inconclusive date format detection, using MM/DD/YYYY as default');
-      return 'MM/DD/YYYY';
+    for (const dateStr of dates) {
+      if (!dateStr.includes('/')) continue;
+      
+      const parts = dateStr.split('/');
+      if (parts.length !== 3) continue;
+      
+      const num1 = parseInt(parts[0], 10);
+      const num2 = parseInt(parts[1], 10);
+      const year = parseInt(parts[2], 10);
+      
+      // Skip if either number is > 12 (unambiguous)
+      if (num1 > 12 || num2 > 12) continue;
+      
+      // Check if date is valid in MM/DD format
+      if (this.isValidDate(num1, num2, year)) {
+        mmddValid++;
+      }
+      
+      // Check if date is valid in DD/MM format
+      if (this.isValidDate(num2, num1, year)) {
+        ddmmValid++;
+      }
     }
+    
+    return { mmdd: mmddValid, ddmm: ddmmValid };
+  }
+
+  /**
+   * Checks if a date is valid
+   * @param {number} month - Month (1-12)
+   * @param {number} day - Day
+   * @param {number} year - Year
+   * @returns {boolean} - Whether the date is valid
+   */
+  static isValidDate(month, day, year) {
+    if (month < 1 || month > 12) return false;
+    if (day < 1) return false;
+    
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return day <= daysInMonth;
+  }
+
+  /**
+   * Analyzes date sequences for consistency
+   * @param {Array<string>} dates - Array of date strings
+   * @returns {Object} - Scores for MM/DD and DD/MM formats
+   */
+  static analyzeDateConsistency(dates) {
+    let mmddConsistent = 0;
+    let ddmmConsistent = 0;
+    
+    // Sort dates to analyze sequences
+    const sortedDates = [...dates].sort();
+    
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prevDate = sortedDates[i - 1];
+      const currDate = sortedDates[i];
+      
+      if (!prevDate.includes('/') || !currDate.includes('/')) continue;
+      
+      const prevParts = prevDate.split('/');
+      const currParts = currDate.split('/');
+      
+      if (prevParts.length !== 3 || currParts.length !== 3) continue;
+      
+      // Check MM/DD consistency
+      const prevMonth = parseInt(prevParts[0], 10);
+      const currMonth = parseInt(currParts[0], 10);
+      const prevDay = parseInt(prevParts[1], 10);
+      const currDay = parseInt(currParts[1], 10);
+      
+      if (this.isConsistentSequence(prevMonth, currMonth, prevDay, currDay)) {
+        mmddConsistent++;
+      }
+      
+      // Check DD/MM consistency
+      if (this.isConsistentSequence(prevDay, currDay, prevMonth, currMonth)) {
+        ddmmConsistent++;
+      }
+    }
+    
+    return { mmdd: mmddConsistent, ddmm: ddmmConsistent };
+  }
+
+  /**
+   * Checks if a sequence of dates is consistent
+   * @param {number} prevMajor - Previous major component (month or day)
+   * @param {number} currMajor - Current major component
+   * @param {number} prevMinor - Previous minor component (day or month)
+   * @param {number} currMinor - Current minor component
+   * @returns {boolean} - Whether the sequence is consistent
+   */
+  static isConsistentSequence(prevMajor, currMajor, prevMinor, currMinor) {
+    // If major component increases, sequence is consistent
+    if (currMajor > prevMajor) return true;
+    
+    // If major component stays same but minor increases, sequence is consistent
+    if (currMajor === prevMajor && currMinor > prevMinor) return true;
+    
+    return false;
   }
 
   // Clears all data from localStorage
@@ -1056,26 +1106,23 @@ export class FileUploader {
 
   // Validates that all required headers exist in the CSV data
   static validateCSVFormat(data, fileType) {
-    if (!data || !data[0]) {
+    if (!data || !Array.isArray(data) || data.length === 0) {
       throw new Error('No data to validate');
     }
 
-    const headers = Object.keys(data[0]);
     const requiredColumns = {
-      trades: ['time', 'dir', 'px', 'sz', 'fee', 'coin', 'ntl', 'closedPnl'],
-      funding: ['time', 'payment', 'rate', 'coin', 'sz', 'side'],
+      trades: ['time', 'dir', 'px', 'sz', 'fee', 'ntl', 'coin'],
+      funding: ['time', 'payment', 'rate', 'coin'],
       deposits: ['time', 'action', 'accountValueChange', 'fee'],
-      stakingRewards: ['time', 'amount', 'source'],
-      stakingActions: ['time', 'action', 'amount', 'validator']
+      stakingRewards: ['time', 'source', 'amount'],
+      stakingActions: ['time', 'action', 'validator', 'amount']
     };
 
-    const missingColumns = requiredColumns[fileType]?.filter(col => !headers.includes(col));
-    
-    if (missingColumns?.length > 0) {
-      throw new Error(
-        `Missing required columns for ${fileType}: ${missingColumns.join(', ')}\n` +
-        `Found columns: ${headers.join(', ')}`
-      );
+    const columns = Object.keys(data[0]);
+    const missingColumns = requiredColumns[fileType].filter(col => !columns.includes(col));
+
+    if (missingColumns.length > 0) {
+      throw new Error(`Missing required columns for ${fileType}: ${missingColumns.join(', ')}. Found columns: ${columns.join(', ')}`);
     }
   }
 
@@ -1100,21 +1147,21 @@ export class FileUploader {
       // Generate two rows for each token
       const rows = Object.entries(tokenAddressMap).flatMap(([token, address]) => [
         // Row with full address format
-        // [
-        //   new Date().toISOString(), // Current date
-        //   '', // Sent Amount
-        //   '', // Sent Currency
-        //   '1', // Received Amount
-        //   address, // Full token address (e.g., PURR:address:HYPE)
-        //   '', // Fee Amount
-        //   '', // Fee Currency
-        //   '', // Net Worth Amount
-        //   '', // Net Worth Currency
-        //   '', // Label
-        //   `Test transaction for ${token} using full address`, // Description with token name
-        //   '' // TxHash
-        // ]
-        // ,
+        [
+          new Date().toISOString(), // Current date
+          '', // Sent Amount
+          '', // Sent Currency
+          '1', // Received Amount
+          address, // Full token address (e.g., PURR:address:HYPE)
+          '', // Fee Amount
+          '', // Fee Currency
+          '', // Net Worth Amount
+          '', // Net Worth Currency
+          '', // Label
+          `Test transaction for ${token} using full address`, // Description with token name
+          '' // TxHash
+        ]
+        ,
         // Row with just token symbol
         [
           new Date().toISOString(), // Current date
@@ -1162,5 +1209,173 @@ export class FileUploader {
       console.error('Error generating test Koinly CSV:', error);
       throw error;
     }
+  }
+
+  static downloadTaxCSV(timeline, taxService) {
+    try {
+      const mapper = new TagMapper(taxService);
+      
+      // Track problematic assets for Koinly
+      let problematicAssets = null;
+      if (taxService === TAX_SERVICES.KOINLY) {
+        problematicAssets = {
+          soft: new Set(),
+          hard: new Set()
+        };
+        
+        // First pass: identify all problematic assets
+        timeline.forEach(event => {
+          const currencies = [
+            event.data?.sentCurrency,
+            event.data?.receivedCurrency,
+            event.data?.feeCurrency
+          ].filter(Boolean);
+          
+          currencies.forEach(currency => {
+            const warningType = getAssetWarningType(currency);
+            if (warningType === 'soft') problematicAssets.soft.add(currency);
+            if (warningType === 'hard') problematicAssets.hard.add(currency);
+          });
+        });
+      }
+      
+      // Create NULL mappings for hard warning assets (Koinly only)
+      const nullMappings = taxService === TAX_SERVICES.KOINLY 
+        ? this.createNullMappings(Array.from(problematicAssets.hard))
+        : null;
+
+      // Create rows for the CSV
+      const rows = timeline.map(event => {
+        // Get the appropriate tag for this tax service
+        const tag = mapper.mapTag(event.data.internalTag);
+        
+        // Create a data object with standard field names
+        const data = {
+          date: event.time,
+          sentAmount: event.data.sentAmount,
+          sentCurrency: taxService === TAX_SERVICES.KOINLY 
+            ? this.formatKoinlyCurrency(event.data.sentCurrency, nullMappings)
+            : event.data.sentCurrency,
+          receivedAmount: event.data.receivedAmount,
+          receivedCurrency: taxService === TAX_SERVICES.KOINLY 
+            ? this.formatKoinlyCurrency(event.data.receivedCurrency, nullMappings)
+            : event.data.receivedCurrency,
+          feeAmount: event.data.feeAmount,
+          feeCurrency: taxService === TAX_SERVICES.KOINLY 
+            ? this.formatKoinlyCurrency(event.data.feeCurrency, nullMappings)
+            : event.data.feeCurrency,
+          netWorthAmount: event.data.netWorthAmount || '',
+          netWorthCurrency: event.data.netWorthCurrency || '',
+          tag,
+          description: event.data.description,
+          txHash: event.original?.txHash || ''
+        };
+
+        // Map the fields to the correct order and format for the tax service
+        return mapper.mapFields(data).map(cell => {
+          if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
+            return `"${cell.toString().replace(/"/g, '""')}"`;
+          }
+          return cell;
+        });
+      });
+
+      // Create the CSV content with headers
+      const csvContent = [
+        mapper.getHeaders().join(','),
+        ...rows.map(row => row.join(','))
+      ].join('\n');
+
+      // Create and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hyperliquid_${taxService}_export.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      // For Koinly, also create the unsupported assets CSV if needed
+      if (taxService === TAX_SERVICES.KOINLY && problematicAssets.hard.size > 0) {
+        const unsupportedRows = timeline
+          .filter(event => {
+            const currencies = [
+              event.data?.sentCurrency,
+              event.data?.receivedCurrency,
+              event.data?.feeCurrency
+            ].filter(Boolean);
+            return currencies.some(currency => getAssetWarningType(currency) === 'hard');
+          })
+          .map(event => {
+            const tag = mapper.mapTag(event.data.internalTag);
+            const data = {
+              date: event.time,
+              sentAmount: event.data.sentAmount,
+              sentCurrency: this.formatKoinlyCurrency(event.data.sentCurrency, nullMappings),
+              receivedAmount: event.data.receivedAmount,
+              receivedCurrency: this.formatKoinlyCurrency(event.data.receivedCurrency, nullMappings),
+              feeAmount: event.data.feeAmount,
+              feeCurrency: this.formatKoinlyCurrency(event.data.feeCurrency, nullMappings),
+              netWorthAmount: event.data.netWorthAmount || '',
+              netWorthCurrency: event.data.netWorthCurrency || '',
+              tag,
+              description: event.data.description,
+              txHash: event.original?.txHash || ''
+            };
+            return mapper.mapFields(data).map(cell => {
+              if (cell && (cell.toString().includes(',') || cell.toString().includes('"'))) {
+                return `"${cell.toString().replace(/"/g, '""')}"`;
+              }
+              return cell;
+            });
+          });
+
+        const unsupportedCSV = [
+          mapper.getHeaders().join(','),
+          ...unsupportedRows.map(row => row.join(','))
+        ].join('\n');
+
+        const unsupportedBlob = new Blob([unsupportedCSV], { type: 'text/csv' });
+        const unsupportedUrl = window.URL.createObjectURL(unsupportedBlob);
+        const unsupportedA = document.createElement('a');
+        unsupportedA.href = unsupportedUrl;
+        unsupportedA.download = 'hyperliquid_transactions_koinly_unsupported_assets.csv';
+        document.body.appendChild(unsupportedA);
+        unsupportedA.click();
+        document.body.removeChild(unsupportedA);
+        window.URL.revokeObjectURL(unsupportedUrl);
+      }
+
+      // Store problematic assets in localStorage for the follow-up guide (Koinly only)
+      if (taxService === TAX_SERVICES.KOINLY) {
+        localStorage.setItem('koinlySoftWarningAssets', 
+          JSON.stringify(Array.from(problematicAssets.soft)));
+        localStorage.setItem('koinlyHardWarningAssets', 
+          JSON.stringify(Array.from(problematicAssets.hard)));
+      }
+
+      return {
+        success: true,
+        ...(taxService === TAX_SERVICES.KOINLY && {
+          softWarningAssets: Array.from(problematicAssets.soft),
+          hardWarningAssets: Array.from(problematicAssets.hard),
+          nullMappings
+        })
+      };
+    } catch (error) {
+      console.error('Error generating CSV:', error);
+      throw error;
+    }
+  }
+
+  // Helper function for Koinly currency formatting
+  static formatKoinlyCurrency(currency, nullMappings) {
+    if (!currency) return '';
+    const warningType = getAssetWarningType(currency);
+    return warningType === 'hard' 
+      ? nullMappings[currency]
+      : formatCurrencyForKoinly(currency);
   }
 }

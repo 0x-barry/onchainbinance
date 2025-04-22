@@ -14,6 +14,18 @@ const AnimatedLogo = styled.img`
   margin-right: auto;
 `;
 
+const Eyebrow = styled.h3`
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-family: ${props => props.theme.fonts.header};
+  width: 100%;
+
+  @media (min-width: 768px) {
+    font-size: 1.25rem;
+  }
+`;
+
 const GuideContainer = styled.div`
   max-width: 1000px;
   margin: 0 auto;
@@ -151,6 +163,18 @@ const KoinlyGuide = () => {
     if (!location.state?.timeline) {
       console.warn('Attempted to access KoinlyGuide without timeline data, redirecting to upload');
       navigate('/tax');
+    } else {
+      console.log('Timeline data received:', {
+        timelineLength: location.state.timeline.length,
+        firstEvent: location.state.timeline[0],
+        lastEvent: location.state.timeline[location.state.timeline.length - 1],
+        sampleEvent: location.state.timeline[0] ? {
+          eventType: location.state.timeline[0].eventType,
+          data: location.state.timeline[0].data,
+          display: location.state.timeline[0].display,
+          time: location.state.timeline[0].time
+        } : null
+      });
     }
   }, [location.state, navigate]);
   
@@ -161,6 +185,7 @@ const KoinlyGuide = () => {
   const softWarningAssets = React.useMemo(() => {
     try {
       const assets = localStorage.getItem('koinlySoftWarningAssets');
+      console.log('Soft warning assets from localStorage:', assets);
       return assets ? JSON.parse(assets) : [];
     } catch (error) {
       console.error('Error parsing soft warning assets:', error);
@@ -171,6 +196,7 @@ const KoinlyGuide = () => {
   const hardWarningAssets = React.useMemo(() => {
     try {
       const assets = localStorage.getItem('koinlyHardWarningAssets');
+      console.log('Hard warning assets from localStorage:', assets);
       return assets ? JSON.parse(assets) : [];
     } catch (error) {
       console.error('Error parsing hard warning assets:', error);
@@ -285,7 +311,7 @@ const KoinlyGuide = () => {
           Step 2: Remove Intrawallet Transfers
         </CollapsibleTitle>
         <CollapsibleContent $isExpanded={expandedSections.step2}>
-          <p>Intrawallet transfers within your Hyperliquid account (i.e., between spot and perps accounts, between subaccounts, or between spot and staking balances) can potentially be ignored within Koinly as they are transfers within the same wallet:</p>
+          <p>Intrawallet transfers within your Hyperliquid account (i.e., between spot and perps accounts, or between spot and staking balances) can potentially be ignored within Koinly as they are transfers within the same wallet:</p>
           <OrderedList>
             <ListItem>Go to <strong>Transactions</strong> in Koinly</ListItem>
             <ListItem>Filter by Description containing [INTRAWALLET TRANSFER]</ListItem>

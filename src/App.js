@@ -10,7 +10,15 @@ import DriftErrorPage from './components/DriftErrorPage';
 import Upload from './components/Tax/Upload';
 import AirdropConfig from './components/Tax/AirdropConfig';
 import KoinlyGuide from './components/Tax/KoinlyGuide';
+import AwakenGuide from './components/Tax/AwakenGuide';
 import { useState } from 'react';
+import { 
+  TradeHistory, 
+  FundingHistory, 
+  DepositsAndWithdrawals,
+  StakingRewards,
+  StakingActions
+} from './components/Tax/Upload';
 
 const AlphaTag = styled.span`
   background-color: #ff4444;
@@ -111,7 +119,6 @@ function App() {
               <li>
                 <StyledNavLink to="/tax">
                   Tax
-                  <AlphaTag>⚠️ ALPHA</AlphaTag>
                 </StyledNavLink>
               </li>
             </NavList>
@@ -122,6 +129,7 @@ function App() {
             <Route path="/tax" element={<Upload onDataProcessed={handleDataProcessed} />} />
             <Route path="/airdrop-config" element={<AirdropConfig timeline={timeline} onUpdate={handleTimelineUpdate} />} />
             <Route path="/koinly-guide" element={<KoinlyGuide timeline={timeline} />} />
+            <Route path="/awaken-guide" element={<AwakenGuide timeline={timeline} />} />
             <Route path="/summary" element={<Summary timeline={timeline} />} />
             <Route path="/ratio" element={<RatioMeter />} />
             <Route path="/calculator" element={<Navigate to="/calculator/solana" replace />} />

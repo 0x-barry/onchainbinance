@@ -150,23 +150,42 @@ const KoinlyAssetReport = ({ timeline = [] }) => {
     const assets = new Set();
     
     if (timeline && Array.isArray(timeline)) {
+      console.log('Processing timeline for assets:', {
+        timelineLength: timeline.length,
+        firstEvent: timeline[0],
+        lastEvent: timeline[timeline.length - 1]
+      });
+      
       timeline.forEach(event => {
-        if (event.display?.sentCurrency) assets.add(event.display.sentCurrency);
-        if (event.display?.receivedCurrency) assets.add(event.display.receivedCurrency);
-        if (event.display?.feeCurrency) assets.add(event.display.feeCurrency);
+        // Check both data and display properties for currencies
+        const currencies = [
+          event.data?.sentCurrency,
+          event.data?.receivedCurrency,
+          event.data?.feeCurrency,
+          event.display?.sentCurrency,
+          event.display?.receivedCurrency,
+          event.display?.feeCurrency
+        ].filter(Boolean);
+        
+        currencies.forEach(currency => assets.add(currency));
       });
     }
     
-    return Array.from(assets).filter(asset => asset); // Remove empty values
+    const assetArray = Array.from(assets).filter(asset => asset); // Remove empty values
+    console.log('Extracted unique assets:', assetArray);
+    return assetArray;
   }, [timeline]);
   
   // Categorize assets by support status
   const categorizedAssets = React.useMemo(() => {
-    return {
+    const categorized = {
       supported: allAssets.filter(asset => isFullySupported(asset)),
       softWarning: allAssets.filter(asset => getAssetWarningType(asset) === 'soft'),
       hardWarning: allAssets.filter(asset => getAssetWarningType(asset) === 'hard')
     };
+    
+    console.log('Categorized assets:', categorized);
+    return categorized;
   }, [allAssets]);
   
   // Count transactions by asset support status
@@ -180,7 +199,11 @@ const KoinlyAssetReport = ({ timeline = [] }) => {
     
     if (timeline && Array.isArray(timeline)) {
       timeline.forEach(event => {
+        // Check both data and display properties for currencies
         const assets = [
+          event.data?.sentCurrency,
+          event.data?.receivedCurrency,
+          event.data?.feeCurrency,
           event.display?.sentCurrency,
           event.display?.receivedCurrency,
           event.display?.feeCurrency
@@ -196,6 +219,7 @@ const KoinlyAssetReport = ({ timeline = [] }) => {
       });
     }
     
+    console.log('Transaction counts:', counts);
     return counts;
   }, [timeline]);
   

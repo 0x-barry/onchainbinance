@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileUploader } from '../../services/FileUploader';
 import hlAnimatedGif from '../../images/hl-animated.gif';
 import StandardTable from '../UI/StandardTable';
-import WizardNavigation, { WizardButton, LeftArrowIcon, RightArrowIcon } from '../UI/WizardNavigation';
+import WizardNavigation, { WizardButton, RightArrowIcon } from '../UI/WizardNavigation';
+import { TAX_SERVICES, taxServiceConfigs } from '../../services/TaxServiceConfig';
 
 // Styled components for the animated logo and eyebrow
 const AnimatedLogo = styled.img`
@@ -132,6 +133,21 @@ const ErrorMessage = styled.div`
   font-family: ${props => props.theme.fonts.body};
 `;
 
+const TaxServiceSelect = styled.select`
+  padding: 0.5rem;
+  border-radius: ${props => props.theme.borderRadius.small};
+  border: 1px solid ${props => props.theme.colors.border};
+  background: ${props => props.theme.colors.background};
+  color: ${props => props.theme.colors.text};
+  font-family: ${props => props.theme.fonts.body};
+  margin-right: 1rem;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${props => props.theme.colors.primary};
+  }
+`;
+
 const Summary = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
@@ -139,10 +155,10 @@ const Summary = () => {
   const [timeline, setTimeline] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [filterConfig, setFilterConfig] = useState({
-    eventType: '',
     coin: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    internalTag: ''
   });
   const itemsPerPage = 25;
   const [sortConfig, setSortConfig] = useState({
@@ -151,6 +167,7 @@ const Summary = () => {
   });
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [availableCoins, setAvailableCoins] = useState([]);
+  const [selectedTaxService, setSelectedTaxService] = useState(TAX_SERVICES.KOINLY);
 
   // Add a ref to track if we're already processing
   const isProcessingRef = React.useRef(false);
@@ -213,9 +230,9 @@ const Summary = () => {
     timeline.forEach(event => {
       // Check all possible locations for coin information
       [
-        event.display?.sentCurrency,
-        event.display?.receivedCurrency,
-        event.display?.feeCurrency,
+        event.data.sentCurrency,
+        event.data.receivedCurrency,
+        event.data.feeCurrency,
       ].forEach(coin => {
         if (coin) coins.add(coin);
       });
@@ -228,47 +245,38 @@ const Summary = () => {
   };
 
   const filteredTimeline = timeline.filter(event => {
-    if (filterConfig.eventType) {
-      switch (filterConfig.eventType) {
-        case 'spot_trade':
-          if (event.eventType !== 'trade' || event.type !== 'spot') return false;
-          break;
-        case 'perp_trade':
-          if (event.eventType !== 'trade' || event.type !== 'perp') return false;
-          break;
-        case 'transfer':
-          if (event.eventType !== 'transfer') return false;
-          break;
-        case 'funding':
-          if (event.eventType !== 'funding') return false;
-          break;
-        case 'staking':
-          if (event.eventType !== 'stakingReward' && event.eventType !== 'stakingAction') return false;
-          break;
-        default:
-          if (event.eventType !== filterConfig.eventType) return false;
-      }
-    }
-    
     if (filterConfig.coin) {
       // Extract coin information from various places in the event object
       const eventCoins = [
-        event.display?.sentCurrency,
-        event.display?.receivedCurrency,
-        event.display?.feeCurrency,
-        event.details?.trade?.coin,
-        event.details?.funding?.coin,
-        event.details?.transfer?.coin,
-        event.details?.staking?.coin,
-        event.coin,
-        event.asset
-      ].filter(Boolean); // Filter out undefined/null values
+        event.data.sentCurrency,
+        event.data.receivedCurrency,
+        event.data.feeCurrency,
+        event.original?.coin,
+        event.original?.asset
+      ].filter(Boolean);
       
       // Check if any of the coins match the filter
       if (!eventCoins.some(coin => 
         coin && coin.toLowerCase().includes(filterConfig.coin.toLowerCase())
       )) {
         return false;
+      }
+    }
+    
+    if (filterConfig.internalTag) {
+      // Check if the internal tag matches the filter
+      if (!event.data.internalTag) return false;
+      
+      // Handle roll-up of specific transfer types into broader categories
+      if (filterConfig.internalTag === 'transfer:deposit') {
+        // Roll up all deposit types
+        if (!event.data.internalTag.startsWith('transfer:deposit')) return false;
+      } else if (filterConfig.internalTag === 'transfer:withdrawal') {
+        // Roll up all withdrawal types
+        if (!event.data.internalTag.startsWith('transfer:withdrawal')) return false;
+      } else {
+        // For other tags, use exact match
+        if (!event.data.internalTag.includes(filterConfig.internalTag)) return false;
       }
     }
     
@@ -321,25 +329,25 @@ const Summary = () => {
         case 'time':
           return direction * (new Date(a.time) - new Date(b.time));
         case 'label':
-          return direction * (a.display.eventLabel.localeCompare(b.display.eventLabel));
+          return direction * (a.data.eventLabel.localeCompare(b.data.eventLabel));
         case 'sent': {
-          const aValue = parseFloat(a.display.sentAmount) || 0;
-          const bValue = parseFloat(b.display.sentAmount) || 0;
+          const aValue = parseFloat(a.data.sentAmount) || 0;
+          const bValue = parseFloat(b.data.sentAmount) || 0;
           return direction * (aValue - bValue);
         }
         case 'received': {
-          const aValue = parseFloat(a.display.receivedAmount) || 0;
-          const bValue = parseFloat(b.display.receivedAmount) || 0;
+          const aValue = parseFloat(a.data.receivedAmount) || 0;
+          const bValue = parseFloat(b.data.receivedAmount) || 0;
           return direction * (aValue - bValue);
         }
         case 'fee': {
-          const aValue = parseFloat(a.display.feeAmount) || 0;
-          const bValue = parseFloat(b.display.feeAmount) || 0;
+          const aValue = parseFloat(a.data.feeAmount) || 0;
+          const bValue = parseFloat(b.data.feeAmount) || 0;
           return direction * (aValue - bValue);
         }
         case 'gain': {
-          const aValue = parseFloat(a.display.pnl || 0);
-          const bValue = parseFloat(b.display.pnl || 0);
+          const aValue = parseFloat(a.data.pnl || 0);
+          const bValue = parseFloat(b.data.pnl || 0);
           return direction * (aValue - bValue);
         }
         default:
@@ -349,17 +357,17 @@ const Summary = () => {
     return sorted;
   }, [filteredTimeline, sortConfig]);
 
-  const handleExportToKoinly = () => {
+  const handleExportToTaxService = () => {
     try {
-      const result = FileUploader.downloadKoinlyCSV(timeline);
+      const result = FileUploader.downloadTaxCSV(timeline, selectedTaxService);
       
       // Store the result in localStorage for the guide to use
       if (result) {
         localStorage.setItem('lastExportResult', JSON.stringify(result));
       }
       
-      // Show success message and offer to navigate to guide
-      navigate('/koinly-guide', { state: { timeline } });
+      // Navigate to the appropriate guide page
+      navigate(taxServiceConfigs[selectedTaxService].guidePath, { state: { timeline } });
 
     } catch (error) {
       console.error('Export failed:', error);
@@ -420,9 +428,9 @@ const Summary = () => {
       sortable: true,
       render: (item) => (
         <LabelTag>
-          <span className="eventLabel">{item.display.eventLabel}</span>
-          {item.koinly.tag && (
-            <span className="tag">{item.koinly.tag}</span>
+          <span className="eventLabel">{item.data.eventLabel}</span>
+          {item.data.tag && (
+            <span className="tag">{item.data.tag}</span>
           )}
         </LabelTag>
       )
@@ -431,24 +439,24 @@ const Summary = () => {
       id: 'sent', 
       label: 'Sent', 
       sortable: true,
-      render: (item) => item.display.sentAmount && (
-        `${formatNumber(item.display.sentAmount)} ${item.display.sentCurrency}`
+      render: (item) => item.data.sentAmount && (
+        `${formatNumber(item.data.sentAmount)} ${item.data.sentCurrency}`
       )
     },
     { 
       id: 'received', 
       label: 'Received', 
       sortable: true,
-      render: (item) => item.display.receivedAmount && (
-        `${formatNumber(item.display.receivedAmount)} ${item.display.receivedCurrency}`
+      render: (item) => item.data.receivedAmount && (
+        `${formatNumber(item.data.receivedAmount)} ${item.data.receivedCurrency}`
       )
     },
     { 
       id: 'fee', 
       label: 'Fee', 
       sortable: true,
-      render: (item) => item.display.feeAmount && (
-        `${formatNumber(item.display.feeAmount)} ${item.display.feeCurrency}`
+      render: (item) => item.data.feeAmount && (
+        `${formatNumber(item.data.feeAmount)} ${item.data.feeCurrency}`
       )
     },
     { 
@@ -481,17 +489,27 @@ const Summary = () => {
     ],
     mainFilters: [
       {
-        id: 'eventType',
-        label: 'Event Type:',
-        value: filterConfig.eventType,
+        id: 'internalTag',
+        label: 'Tag:',
+        value: filterConfig.internalTag,
         type: 'select',
         options: [
-          { value: '', label: 'All Event Types' },
-          { value: 'spot_trade', label: 'Spot Trades' },
-          { value: 'perp_trade', label: 'Perp Trades' },
-          { value: 'transfer', label: 'Transfers' },
+          { value: '', label: 'All Tags' },
+          { value: 'trade:spot', label: 'Spot Trade' },
+          { value: 'trade:perp:open', label: 'Perp Open' },
+          { value: 'trade:perp:close', label: 'Perp Close' },
+          { value: 'transfer:deposit', label: 'All Deposits' },
+          { value: 'transfer:withdrawal', label: 'All Withdrawals' },
+          { value: 'transfer:internal', label: 'Internal Transfer' },
+          { value: 'transfer:airdrop', label: 'Airdrop' },
+          { value: 'transfer:deposit:subaccount', label: 'Subaccount Deposit' },
+          { value: 'transfer:withdrawal:subaccount', label: 'Subaccount Withdrawal' },
+          { value: 'transfer:withdrawal:spot_to_evm', label: 'Spot to EVM Transfer' },
+          { value: 'transfer:deposit:evm_to_spot', label: 'EVM to Spot Transfer' },
           { value: 'funding', label: 'Funding' },
-          { value: 'staking', label: 'Staking' }
+          { value: 'staking:reward', label: 'Staking Reward' },
+          { value: 'staking:delegate', label: 'Staking Delegate' },
+          { value: 'staking:undelegate', label: 'Staking Undelegate' }
         ]
       },
       {
@@ -528,7 +546,7 @@ const Summary = () => {
       <React.Fragment key={rowIndex}>
         <TransactionRow 
           onClick={() => toggleRow(rowIndex)}
-          $isInternalTransfer={item.details?.transfer?.isInternalTransfer || false}
+          $isInternalTransfer={item.isInternalTransfer || false}
         >
           {columns.map(column => (
             <td key={`${rowIndex}-${column.id}`}>
@@ -540,17 +558,17 @@ const Summary = () => {
           <DescriptionRow>
             <td></td>
             <td colSpan="5">
-              <div className="description">{item.display.description}</div>
-              {item.details?.transfer?.action === 'genesis.distribution' && (
+              <div className="description">{item.data.description}</div>
+              {item.original?.action === 'genesis.distribution' && (
                 <div className="airdrop-info" style={{ marginTop: '0.5rem', color: props => props.theme.colors.accent.green }}>
                   <strong>Airdrop Cost Basis:</strong> {
-                    item.display.netWorthAmount 
-                      ? `$${item.display.netWorthAmount} ${item.display.netWorthCurrency || 'USD'}`
+                    item.data.netWorthAmount 
+                      ? `$${item.data.netWorthAmount} ${item.data.netWorthCurrency || 'USD'}`
                       : 'Not set'
                   }
                 </div>
               )}
-              <div className="raw-data">{JSON.stringify(item, null, 2)}</div>
+              <div className="raw-data">{JSON.stringify(item.original, null, 2)}</div>
             </td>
           </DescriptionRow>
         )}
@@ -648,13 +666,34 @@ const Summary = () => {
         <WizardButton onClick={handleStartOver}>
           Start Over
         </WizardButton>
-        <WizardButton 
-          onClick={handleExportToKoinly}
-          primary
-          rightIcon={<RightArrowIcon />}
-        >
-          Export to Koinly
-        </WizardButton>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginLeft: 'auto' }}>
+          {/* <WizardButton 
+            onClick={handleGenerateTestCSV}
+            style={{ background: props => props.theme.colors.secondary, borderColor: props => props.theme.colors.secondary }}
+          >
+            Generate Test CSV
+          </WizardButton> */}
+          <label style={{ color: props => props.theme.colors.text.secondary, fontSize: '0.8rem' }}>Choose Service:</label>
+          <TaxServiceSelect
+            value={selectedTaxService}
+            onChange={(e) => setSelectedTaxService(e.target.value)}
+            style={{ background: '#ffffff', border: '1px solid #e0e0e0' }}
+          >
+            {Object.values(TAX_SERVICES).map(service => (
+              <option key={service} value={service}>
+                {taxServiceConfigs[service].name}
+                {service === TAX_SERVICES.AWAKEN && ' ⚠️ ALPHA'}
+              </option>
+            ))}
+          </TaxServiceSelect>
+          <WizardButton 
+            primary
+            onClick={handleExportToTaxService}
+            rightIcon={<RightArrowIcon />}
+          >
+            Export CSV
+          </WizardButton>
+        </div>
       </WizardNavigation>
     </Container>
   );

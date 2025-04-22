@@ -378,31 +378,42 @@ const Upload = () => {
       .every(type => fileNames.some(name => name.startsWith(type.filePrefix)));
   };
 
-  const handleFileUpload = async (e) => {
-    const uploadedFiles = Array.from(e.target.files || e.dataTransfer.files);
-    if (uploadedFiles.length === 0) return;
-
-    setError(null);
-
+  const handleFileUpload = async (file, fileType) => {
     try {
-      const newFiles = {};
-      for (const file of uploadedFiles) {
-        try {
-          const data = await FileUploader.parseCSVFile(file);
-          newFiles[file.name] = data;
-        } catch (parseError) {
-          console.error(`Error parsing ${file.name}:`, parseError);
-          throw new Error(`Failed to parse ${file.name}: ${parseError.message}`);
-        }
+      setProcessing(true);
+      const data = await FileUploader.parseCSVFile(file);
+      
+      // Validate the data before setting it in state
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        throw new Error('No valid data found in the file');
       }
-
+      
+      // Ensure the data has the expected structure
+      const validatedData = data.map(row => {
+        // Ensure all required fields are present and properly formatted
+        const validatedRow = { ...row };
+        
+        // Add any necessary validation or transformation here
+        // For example, ensure time fields are properly formatted
+        if (validatedRow.time) {
+          validatedRow.time = FileUploader.parseDate(validatedRow.time);
+        }
+        
+        return validatedRow;
+      });
+      
       setFiles(prevFiles => ({
         ...prevFiles,
-        ...newFiles
+        [file.name]: validatedData
       }));
-    } catch (err) {
-      console.error('Upload error:', err);
-      setError(`Error processing files: ${err.message}`);
+      
+      // Clear any previous errors
+      setError(null);
+    } catch (error) {
+      console.error(`Error processing ${fileType} file:`, error);
+      setError(`Failed to process ${fileType} file: ${error.message}`);
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -419,7 +430,7 @@ const Upload = () => {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFileUpload(e);
+    handleFileUpload(e.dataTransfer.files[0], e.dataTransfer.files[0].name);
   };
 
   const storeAndContinue = () => {
@@ -616,7 +627,14 @@ const Upload = () => {
                 ref={fileInputRef}
                 accept=".csv"
                 multiple
-                onChange={handleFileUpload}
+                onChange={(e) => {
+                  const fileList = e.target.files;
+                  if (fileList && fileList.length > 0) {
+                    Array.from(fileList).forEach(file => {
+                      handleFileUpload(file, file.name);
+                    });
+                  }
+                }}
               />
             </DropZone>
           </DropZoneContainer>
